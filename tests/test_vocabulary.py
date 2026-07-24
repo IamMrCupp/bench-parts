@@ -7,7 +7,15 @@ intake hand-listed its statuses in both places and needed a drift test to keep
 them honest. Deriving removes the failure mode instead of detecting it.
 """
 
-from bench_parts.vocabulary import Category, MovementReason, sql_in_list
+import pytest
+
+from bench_parts.vocabulary import (
+    Category,
+    MovementReason,
+    sql_in_list,
+    to_category,
+    to_reason,
+)
 
 
 def test_categories_are_slugs() -> None:
@@ -63,3 +71,78 @@ def test_sql_in_list_covers_the_whole_enum() -> None:
 
     for category in Category:
         assert f"'{category.value}'" in rendered
+
+
+# --- boundary coercion ------------------------------------------------------
+#
+# These exist because of benchhud-intake's C.3 bug: `Status` was a StrEnum, a
+# validator compared with `is`, and string input silently skipped the check.
+# 126 green tests said nothing, because every test passed enum members while
+# every real caller passes strings off HTTP. `Category` has the same shape.
+
+
+def test_to_category_accepts_a_plain_string() -> None:
+    """The path every real caller takes — a form post or a JSON body."""
+    assert to_category("mosfet") is Category.MOSFET
+
+
+def test_to_category_accepts_an_enum_member() -> None:
+    assert to_category(Category.MOSFET) is Category.MOSFET
+
+
+def test_to_category_returns_an_identity_comparable_member() -> None:
+    """The specific trap: `==` passes for a bare string where `is` fails.
+
+    Coercion must yield a real member, so downstream code can use either
+    comparison without a silent behaviour change.
+    """
+    coerced = to_category("capacitor")
+
+    assert coerced is Category.CAPACITOR
+    assert coerced == Category.CAPACITOR
+
+
+def test_raw_string_is_not_identity_equal_to_the_member() -> None:
+    """Pins *why* coercion is needed — delete this and the reason is invisible."""
+    assert "capacitor" == Category.CAPACITOR
+    assert "capacitor" is not Category.CAPACITOR
+
+
+def test_to_category_is_case_and_space_insensitive() -> None:
+    """Bench input is typed by a person; " MOSFET " should not be an error."""
+    assert to_category(" MOSFET ") is Category.MOSFET
+
+
+def test_to_category_rejects_an_unknown_value() -> None:
+    with pytest.raises(ValueError, match="mosfets"):
+        to_category("mosfets")
+
+
+def test_to_category_rejects_a_label_rather_than_a_slug() -> None:
+    """Labels are presentation. Accepting them would make the stored value
+    depend on UI wording."""
+    with pytest.raises(ValueError):
+        to_category("Crystal / Oscillator")
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_to_category_rejects_empty(value) -> None:
+    with pytest.raises(ValueError):
+        to_category(value)
+
+
+def test_to_reason_accepts_a_plain_string() -> None:
+    assert to_reason("restock") is MovementReason.RESTOCK
+
+
+def test_to_reason_rejects_an_unknown_value() -> None:
+    with pytest.raises(ValueError, match="shrinkage"):
+        to_reason("shrinkage")
+
+
+def test_error_names_the_valid_options() -> None:
+    """A bad category at a bench should say what's allowed, not just "invalid"."""
+    with pytest.raises(ValueError) as excinfo:
+        to_category("widget")
+
+    assert "mosfet" in str(excinfo.value)
