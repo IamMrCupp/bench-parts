@@ -1,0 +1,20 @@
+# Keep the build context small and never ship local state into the image.
+.git/
+.github/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Local data — must never reach an image layer. Live copies live on a cluster
+# PVC; these only ever exist on a dev box.
+parts.db
+parts.db-*
+.env
+
+.claude/
+.DS_Store
