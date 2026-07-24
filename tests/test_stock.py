@@ -11,7 +11,7 @@ can't silently go unclassified.
 
 import pytest
 
-from bench_parts.stock import StockStatus, is_below_min, stock_status
+from bench_parts.stock import ORDERABLE, StockStatus, is_below_min, stock_status
 
 
 def test_zero_is_out() -> None:
@@ -103,11 +103,30 @@ def test_below_min_agrees_with_status() -> None:
             assert is_below_min(quantity, minimum) is expected
 
 
-def test_every_status_is_classified_as_orderable_or_not() -> None:
-    """If a fourth status is added, this fails until it's classified.
+def test_orderable_is_exactly_out_and_low() -> None:
+    """Pins current membership.
 
-    Intake's lesson: a state nobody classified looks exactly like a state that
-    was lost.
+    `ORDERABLE` is *derived* as "everything that isn't OK", so a status added
+    later joins it automatically — the safe direction, since a part nobody
+    classified looks exactly like a part that was lost. That derivation makes
+    "is every status classified?" vacuously true, so the useful assertion is
+    this one: the set is what we think it is, and adding a state will fail here
+    and demand a decision.
     """
+    assert set(ORDERABLE) == {StockStatus.OUT, StockStatus.LOW}
+
+
+def test_ok_is_never_orderable() -> None:
+    assert StockStatus.OK not in ORDERABLE
+
+
+def test_stock_status_only_ever_returns_known_members() -> None:
+    """Across the whole reachable input space, not just the sampled table."""
+    for quantity in range(0, 12):
+        for minimum in range(0, 12):
+            assert stock_status(quantity, minimum) in set(StockStatus)
+
+
+def test_every_status_has_a_label() -> None:
     for status in StockStatus:
-        assert status in StockStatus.ORDERABLE or status is StockStatus.OK
+        assert status.label
