@@ -4,7 +4,8 @@ dynamic = ["version"]
 description = "Self-hosted parts inventory for a board-repair bench — a tablet-friendly app plus a REST API benchhud and other LAN clients consume."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Proprietary — All Rights Reserved" }
+license = "PolyForm-Small-Business-1.0.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Aaron Cupp" }]
 keywords = ["inventory", "parts", "board-repair", "bench", "self-hosted"]
 
@@ -34,10 +35,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "src/parts/__init__.py"
+path = "src/bench_parts/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/parts"]
+packages = ["src/bench_parts"]
 
 # Kept deliberately identical to benchhud-intake's config so the two repos lint
 # the same way and muscle memory transfers between them.
