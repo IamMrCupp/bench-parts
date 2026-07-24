@@ -1,3 +1,25 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+.env
+.pytest_cache/
+.ruff_cache/
+
+# Inventory data. Live copies live on a cluster PVC, so these only ever appear
+# on a dev box — but a stray `git add -A` is how accidents happen, so the
+# patterns cover every sidecar SQLite can produce. Production runs
+# journal_mode=TRUNCATE (NFS), which writes -journal; local dev may still use
+# WAL, which writes -wal and -shm. The list looks redundant on purpose — don't
+# "tidy" it down to just parts.db.
+parts.db
+parts.db-journal
+parts.db-wal
+parts.db-shm
+dist/
+build/
+*.egg-info/
+
 # claude-project-kit — managed block START
 # Local-only Claude Code state — installed globally via install-commands.sh
 # or scoped per-project, but never committed to the source-code repo.
