@@ -1,5 +1,3 @@
-import os  # deliberate unused import to prove the CI lint gate fails
-
 """The package imports and reports a version.
 
 Thin on purpose — it exists so `pytest` has something to collect before there's
