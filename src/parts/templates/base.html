@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    {# The client is a tablet held in one hand at a bench. This tag is not
+       optional — without it mobile browsers render at desktop width and every
+       touch target ends up too small to hit. #}
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}bench-parts{% endblock %}</title>
+
+    {# Inline, no build step, no framework — see plan.md non-goals. The numbers
+       here are the load-bearing part; see the comments against each. #}
+    <style>
+      :root {
+        --ink: #17191c;
+        --muted: #5b6169;
+        --line: #c9ced6;
+        --bg: #fbfbfc;
+        --accent: #1c4f8f;
+        --bad: #a4232b;
+        /* Stock-status colours — the Phase 2 catalogue uses these to make a low
+           part jump out: ok / low (at or below min) / out (zero). */
+        --ok: #1f7a3d;
+        --low: #b5730a;
+        --out: #a4232b;
+        /* 44px is the long-standing minimum for a reliable finger target.
+           Everything interactive is sized off this. */
+        --touch: 44px;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        padding: 1rem;
+        background: var(--bg);
+        color: var(--ink);
+        font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      main, header { max-width: 46rem; margin: 0 auto; }
+
+      h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+      h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+
+      a { color: var(--accent); }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+
+      /* 16px is a hard floor: below it, iOS Safari zooms the viewport on focus
+         and the layout jumps mid-typing. Maddening with a customer waiting. */
+      input, textarea, select, button {
+        font: inherit;
+        font-size: 17px;
+        width: 100%;
+        min-height: var(--touch);
+        padding: 0.5rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--ink);
+      }
+
+      textarea { min-height: calc(var(--touch) * 1.8); resize: vertical; }
+
+      input:focus, textarea:focus, select:focus {
+        outline: 3px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      button {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+        font-weight: 600;
+        /* Comfortably past the minimum — it's the one control you always hit. */
+        min-height: calc(var(--touch) * 1.2);
+        cursor: pointer;
+      }
+
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.5rem 1rem 1rem;
+        margin: 0 0 1.25rem;
+        background: #fff;
+      }
+
+      legend { font-weight: 700; padding: 0 0.4rem; }
+
+      .hint { display: block; color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+
+      .error {
+        border-left: 5px solid var(--bad);
+        background: #fdf2f2;
+        color: var(--bad);
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+
+      table { width: 100%; border-collapse: collapse; background: #fff; }
+      th, td { text-align: left; padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--line); }
+      th { font-size: 0.85rem; text-transform: uppercase; color: var(--muted); }
+
+      dl { margin: 0; }
+      dt { font-size: 0.85rem; text-transform: uppercase; color: var(--muted); margin-top: 0.75rem; }
+      dd { margin: 0.15rem 0 0; }
+
+      .empty { color: var(--muted); }
+      .timestamps { color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e9ecf1; --muted: #9aa3ad; --line: #3a414b;
+          --bg: #16181c; --accent: #7fb2f0; --bad: #f08a8a;
+          --ok: #5fce86; --low: #e0a44a; --out: #f08a8a;
+        }
+        input, textarea, select, fieldset, table { background: #1e2126; }
+        button { color: #10131a; }
+        .error { background: #2a1c1e; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{% block heading %}bench-parts{% endblock %}</h1>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
