@@ -237,6 +237,108 @@ class PartStore:
         ).fetchall()
         return [_to_movement(row) for row in rows]
 
+    # --- movements ----------------------------------------------------------
+
+    def record_movement(
+        self,
+        part_id: int,
+        delta: int,
+        reason: object,
+        *,
+        ticket_ref: object = None,
+        unit_cost_at_time: object = UNSET,
+        now: str | None = None,
+    ) -> Part:
+        """Append to the ledger and move the cached count, atomically.
+
+        **Both writes happen in one transaction.** If either fails, neither
+        lands — a cache that has drifted from its log is the single failure this
+        whole design exists to prevent, and it is silent when it happens.
+
+        The cache update is *relative* (``quantity_on_hand + ?``) and carries its
+        own ``>= 0`` guard in the ``WHERE`` clause, rather than computing a new
+        total from a value read earlier. That read-then-write gap is where
+        concurrent consumers lose updates; SQLite evaluates this in one
+        statement, so two threads taking the last unit can't both succeed.
+
+        ``unit_cost_at_time`` defaults to the part's current ``unit_cost``, so a
+        later price change can't rewrite what a past job cost.
+        """
+        reason = to_reason(reason)
+        delta = int(delta)
+        if delta == 0:
+            raise ValueError("a movement must change the quantity — delta cannot be 0")
+
+        part = self.get_part(part_id)
+        if part is None:
+            raise LookupError(f"no part with id {part_id}")
+
+        # Checked here for a message that names the actual numbers; the WHERE
+        # clause below is what actually enforces it under concurrency.
+        if part.quantity_on_hand + delta < 0:
+            raise ValueError(
+                f"cannot remove {-delta} — only {part.quantity_on_hand} on hand for part {part_id}"
+            )
+
+        cost = part.unit_cost if isinstance(unit_cost_at_time, _Unset) else unit_cost_at_time
+        cost = _optional_non_negative(cost, "unit_cost_at_time")
+        stamp = now or _now()
+
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO movements (part_id, delta, reason, ticket_ref,"
+                " unit_cost_at_time, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (part_id, delta, reason.value, _clean(ticket_ref), cost, stamp),
+            )
+            cursor = self._conn.execute(
+                "UPDATE parts SET quantity_on_hand = quantity_on_hand + ?, updated_at = ?"
+                " WHERE id = ? AND quantity_on_hand + ? >= 0",
+                (delta, stamp, part_id, delta),
+            )
+            if cursor.rowcount != 1:
+                # Another writer got in between the check above and this update.
+                # Raising inside the context manager rolls the movement back too.
+                raise ValueError(f"cannot remove {-delta} from part {part_id} — insufficient stock")
+
+        fetched = self.get_part(part_id)
+        # Just written inside a transaction — this cannot be None.
+        assert fetched is not None
+        return fetched
+
+    def restock(self, part_id: int, amount: int, *, now: str | None = None, **kwargs: Any) -> Part:
+        """Add stock. ``amount`` is positive."""
+        if int(amount) <= 0:
+            raise ValueError(f"restock amount must be positive, got {amount}")
+        return self.record_movement(part_id, int(amount), MovementReason.RESTOCK, now=now, **kwargs)
+
+    def consume(
+        self,
+        part_id: int,
+        amount: int,
+        *,
+        ticket_ref: object = None,
+        now: str | None = None,
+    ) -> Part:
+        """Use stock on a job. ``amount`` is positive and is negated here.
+
+        Taking a positive count rather than a signed delta means a caller can't
+        accidentally *add* stock by passing a negative number to "consume".
+        """
+        if int(amount) <= 0:
+            raise ValueError(f"consume amount must be positive, got {amount}")
+        return self.record_movement(
+            part_id, -int(amount), MovementReason.CONSUME, ticket_ref=ticket_ref, now=now
+        )
+
+    def correct(self, part_id: int, delta: int, *, now: str | None = None) -> Part:
+        """Fix a miscount. Signed — a correction can go either way.
+
+        A correction is a *new row* with an opposing delta, never an edit of the
+        movement that was wrong. History stays append-only, which is what keeps
+        the cache rebuildable and past job costs reconstructable.
+        """
+        return self.record_movement(part_id, delta, MovementReason.CORRECTION, now=now)
+
     # --- updating -----------------------------------------------------------
 
     def update_part(
