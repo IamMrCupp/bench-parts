@@ -103,9 +103,17 @@ def test_to_category_returns_an_identity_comparable_member() -> None:
 
 
 def test_raw_string_is_not_identity_equal_to_the_member() -> None:
-    """Pins *why* coercion is needed — delete this and the reason is invisible."""
-    assert "capacitor" == Category.CAPACITOR
-    assert "capacitor" is not Category.CAPACITOR
+    """Pins *why* coercion is needed — delete this and the reason is invisible.
+
+    Held in a variable rather than written as a literal, and that detail is the
+    whole point: ruff's `F632` catches `is` against a *literal*, but intake's
+    bug compared a variable that had arrived from a form. The linter could not
+    have saved it, which is why the coercion boundary has to.
+    """
+    from_form = "capacitor"
+
+    assert from_form == Category.CAPACITOR
+    assert from_form is not Category.CAPACITOR
 
 
 def test_to_category_is_case_and_space_insensitive() -> None:
