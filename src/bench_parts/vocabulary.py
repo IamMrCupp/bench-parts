@@ -86,6 +86,54 @@ class MovementReason(StrEnum):
     CORRECTION = "correction"
 
 
+def _coerce(enum_cls: type[StrEnum], value: object, what: str) -> StrEnum:
+    """Turn caller input into a real enum member, or raise.
+
+    **Why this exists.** These are ``StrEnum``s, so a bare string compares equal
+    to a member (``"consume" == MovementReason.CONSUME``) but is not identical
+    to one (``"consume" is not MovementReason.CONSUME``). benchhud-intake was
+    bitten by exactly this: a validator compared with ``is``, so string input
+    silently skipped its check, and 126 passing tests never caught it because
+    every test passed enum members while every real caller passes strings off
+    HTTP.
+
+    Coercing at the boundary means downstream code holds real members and can
+    use either comparison safely. Do it *once*, here, rather than trusting every
+    call site to remember.
+    """
+    if isinstance(value, enum_cls):
+        return value
+
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{what} is required — one of: {_options(enum_cls)}")
+
+    try:
+        return enum_cls(value.strip().lower())
+    except ValueError:
+        raise ValueError(
+            f"unknown {what} {value!r} — expected one of: {_options(enum_cls)}"
+        ) from None
+
+
+def _options(enum_cls: type[StrEnum]) -> str:
+    return ", ".join(sorted(m.value for m in enum_cls))
+
+
+def to_category(value: object) -> Category:
+    """Coerce caller input to a :class:`Category`.
+
+    Accepts the stored slug in any case, with surrounding whitespace — bench
+    input is typed by a person. Does **not** accept display labels: those are
+    presentation, and accepting them would tie stored values to UI wording.
+    """
+    return _coerce(Category, value, "category")  # type: ignore[return-value]
+
+
+def to_reason(value: object) -> MovementReason:
+    """Coerce caller input to a :class:`MovementReason`."""
+    return _coerce(MovementReason, value, "reason")  # type: ignore[return-value]
+
+
 def sql_in_list(enum_cls: type[StrEnum]) -> str:
     """Render an enum as a quoted, sorted list for a SQL ``IN (…)`` clause.
 
