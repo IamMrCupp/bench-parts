@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from bench_parts.stock import StockStatus, stock_status
+from bench_parts.stock import StockStatus, is_below_min, stock_status
 from bench_parts.vocabulary import Category, MovementReason, to_category, to_reason
 
 
@@ -230,6 +230,33 @@ class PartStore:
             ).fetchall()
         return [_to_part(row) for row in rows]
 
+    def list_below_min(self) -> list[Part]:
+        """The "to order" list — everything at or below its reorder threshold.
+
+        Filtered through :func:`bench_parts.stock.is_below_min` rather than a
+        SQL ``WHERE quantity_on_hand <= min_quantity``. The two are equivalent
+        today, and that's exactly the problem: a second expression of the rule
+        is one that can drift from the first. Phase 2's colours and Phase 4's
+        ``?below_min=1`` both render this, and a list that disagrees with the
+        colours is the failure you'd trust the wrong way round at a bench.
+
+        The cost is reading the catalogue to filter it, which is nothing at
+        bench scale (hundreds of parts). If this ever grows to where that
+        matters, push the predicate into SQL *and* keep the cross-check test
+        that pins it against this function.
+
+        Ordered most-urgent-first: out before low, then by how far under.
+        """
+        below = [p for p in self.list_parts() if is_below_min(p.quantity_on_hand, p.min_quantity)]
+        return sorted(
+            below,
+            key=lambda p: (
+                p.status is not StockStatus.OUT,
+                -(p.min_quantity - p.quantity_on_hand),
+                p.id,
+            ),
+        )
+
     def list_movements(self, part_id: int) -> list[Movement]:
         """This part's ledger, oldest first."""
         rows = self._conn.execute(
@@ -304,6 +331,54 @@ class PartStore:
         # Just written inside a transaction — this cannot be None.
         assert fetched is not None
         return fetched
+
+    def rebuild_quantities(self, *, now: str | None = None) -> dict[int, tuple[int, int]]:
+        """Recompute every cached quantity from the movements log.
+
+        This is what makes "the log is the source of truth" a claim you can
+        check rather than a comment in the schema. A drifted cache becomes a
+        recoverable problem instead of silent, permanent corruption — and this
+        is the thing you want at 11pm when a count looks wrong.
+
+        Returns ``{part_id: (was, now)}`` for the parts it changed. A repair
+        nobody can see is nearly useless; the caller should log this.
+
+        Raises if the log itself sums negative for any part: that means
+        something upstream is broken, and persisting an impossible stock level
+        would bury the real problem. Validation happens across every part
+        *before* any write, so a bad log leaves the cache untouched rather than
+        half-rewritten.
+        """
+        rows = self._conn.execute(
+            "SELECT p.id AS id, p.quantity_on_hand AS cached,"
+            " COALESCE((SELECT SUM(m.delta) FROM movements m WHERE m.part_id = p.id), 0)"
+            " AS from_log"
+            " FROM parts p ORDER BY p.id"
+        ).fetchall()
+
+        for row in rows:
+            if row["from_log"] < 0:
+                raise ValueError(
+                    f"movements for part {row['id']} sum to {row['from_log']}, which is "
+                    "impossible — refusing to rebuild until the log is corrected"
+                )
+
+        changed = {
+            row["id"]: (row["cached"], row["from_log"])
+            for row in rows
+            if row["cached"] != row["from_log"]
+        }
+
+        if changed:
+            stamp = now or _now()
+            with self._conn:
+                for part_id, (_was, corrected) in changed.items():
+                    self._conn.execute(
+                        "UPDATE parts SET quantity_on_hand = ?, updated_at = ? WHERE id = ?",
+                        (corrected, stamp, part_id),
+                    )
+
+        return changed
 
     def restock(self, part_id: int, amount: int, *, now: str | None = None, **kwargs: Any) -> Part:
         """Add stock. ``amount`` is positive."""
