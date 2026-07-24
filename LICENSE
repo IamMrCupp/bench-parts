@@ -1,0 +1,22 @@
+Copyright (c) 2026 Aaron Cupp. All rights reserved.
+
+This software and its source code are proprietary and confidential.
+
+No license, express or implied, is granted to any person to use, copy, modify,
+merge, publish, distribute, sublicense, or sell copies of this software, or to
+create derivative works from it, except with the prior written permission of the
+copyright holder.
+
+Unauthorized copying, distribution, or disclosure of this software, in whole or
+in part, by any means, is prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Note: benchhud (https://github.com/IamMrCupp/benchhud), which consumes this
+service's API, is separately licensed under the MIT License. This repository is
+not.
