@@ -28,4 +28,4 @@ USER parts
 
 EXPOSE 8000
 
-CMD ["uvicorn", "parts.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "bench_parts.app:app", "--host", "0.0.0.0", "--port", "8000"]

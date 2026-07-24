@@ -5,8 +5,8 @@ real code, and so a broken `src/` layout fails the suite rather than passing an
 empty run.
 """
 
-import parts
+import bench_parts
 
 
 def test_version_is_exposed() -> None:
-    assert parts.__version__
+    assert bench_parts.__version__

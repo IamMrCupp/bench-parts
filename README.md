@@ -32,7 +32,7 @@ Requires [uv](https://docs.astral.sh/uv/). Python 3.12 is pinned via
 
 ```bash
 uv sync
-uv run uvicorn parts.app:app --reload
+uv run uvicorn bench_parts.app:app --reload
 ```
 
 Then hit http://127.0.0.1:8000/ for the app, or `/healthz` for the probe.

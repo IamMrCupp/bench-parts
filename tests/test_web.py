@@ -7,7 +7,7 @@ rewrite the page's content without rewriting these tests.
 
 from fastapi.testclient import TestClient
 
-from parts.app import app
+from bench_parts.app import app
 
 client = TestClient(app)
 

@@ -35,10 +35,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "src/parts/__init__.py"
+path = "src/bench_parts/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/parts"]
+packages = ["src/bench_parts"]
 
 # Kept deliberately identical to benchhud-intake's config so the two repos lint
 # the same way and muscle memory transfers between them.
