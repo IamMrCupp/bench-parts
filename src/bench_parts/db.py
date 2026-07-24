@@ -60,4 +60,12 @@ def connect(path: str | Path) -> sqlite3.Connection:
     # unless asked — an orphaned movement would silently corrupt the stock
     # history this whole design exists to keep trustworthy.
     conn.execute("PRAGMA foreign_keys = ON")
+
+    # SQLite serialises writers, and without a timeout the loser of a race gets
+    # an immediate "database is locked" rather than waiting its turn. FastAPI
+    # runs sync endpoints in a threadpool, so two requests recording stock at
+    # once is ordinary traffic, not an edge case. Five seconds is far longer
+    # than any write here takes and far shorter than a user waits before
+    # reloading.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn

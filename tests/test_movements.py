@@ -269,32 +269,51 @@ def test_cache_matches_the_log_after_a_sequence(store) -> None:
     assert store.get_part(part.id).quantity_on_hand == _sum_of_log(store, part.id) == 11
 
 
-def test_movement_and_cache_update_are_atomic(store, monkeypatch) -> None:
+class _ExplodingConnection:
+    """A connection that fails on the cache UPDATE and nothing else.
+
+    A proxy rather than a monkeypatch: `sqlite3.Connection.execute` is a
+    read-only attribute of a C type, so it can't be replaced on an instance.
+    Transaction control is delegated to the real connection, so the rollback
+    under test is SQLite's own, not a simulation of it.
+    """
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+        self.update_attempts = 0
+
+    def execute(self, sql: str, *args, **kwargs):
+        if sql.strip().upper().startswith("UPDATE PARTS"):
+            self.update_attempts += 1
+            raise sqlite3.OperationalError("simulated failure between writes")
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __enter__(self):
+        return self._conn.__enter__()
+
+    def __exit__(self, *exc_info):
+        return self._conn.__exit__(*exc_info)
+
+
+def test_movement_and_cache_update_are_atomic(store) -> None:
     """Force a failure *between* the two writes and assert both roll back.
 
     This is the single most important test in the phase. If the movement can
     land without its cache update (or vice versa), the log and the count
-    disagree and every downstream number is quietly wrong.
+    disagree and every downstream number is quietly wrong — and nothing
+    surfaces an error at the time.
     """
     part = _part(store, quantity_on_hand=10)
-    real_execute = store._conn.execute
-    calls = {"n": 0}
 
-    def exploding_execute(sql, *args, **kwargs):
-        # Let the movement insert through, then blow up on the cache UPDATE.
-        if sql.strip().upper().startswith("UPDATE PARTS"):
-            calls["n"] += 1
-            raise sqlite3.OperationalError("simulated failure between writes")
-        return real_execute(sql, *args, **kwargs)
-
-    monkeypatch.setattr(store._conn, "execute", exploding_execute)
+    exploding = _ExplodingConnection(store._conn)
+    sabotaged = PartStore(exploding)
 
     with pytest.raises(sqlite3.OperationalError):
-        store.consume(part.id, 3)
+        sabotaged.consume(part.id, 3)
 
-    monkeypatch.undo()
-
-    assert calls["n"] == 1, "the cache UPDATE was never attempted — test is not exercising it"
+    assert exploding.update_attempts == 1, (
+        "the cache UPDATE was never attempted — the test isn't exercising the gap"
+    )
     assert store.get_part(part.id).quantity_on_hand == 10
     assert len(store.list_movements(part.id)) == 1  # the initial only; consume rolled back
     assert store.get_part(part.id).quantity_on_hand == _sum_of_log(store, part.id)
@@ -320,9 +339,9 @@ def test_concurrent_consumption_never_drifts(db_file) -> None:
         try:
             barrier.wait()
             with connect(db_file) as conn:
-                conn.execute("PRAGMA busy_timeout = 5000")
+                # No busy_timeout set here on purpose — connect() must supply it.
                 PartStore(conn).consume(part_id, 1)
-        except Exception as exc:  # noqa: BLE001 - collected and asserted on below
+        except Exception as exc:  # collected, then asserted empty below
             errors.append(exc)
 
     workers = [threading.Thread(target=take) for _ in range(threads)]
