@@ -54,6 +54,11 @@ class CsrfClient(TestClient):
     """
 
     def post(self, url, *, data=None, files=None, **kwargs):
+        # A JSON post (the API) carries no form and needs no token — the
+        # middleware doesn't CSRF-check /api/, and adding a form field would
+        # turn the request into multipart and 422 it.
+        if "json" in kwargs:
+            return super().post(url, data=data, files=files, **kwargs)
         if not (isinstance(data, dict) and "csrf_token" in data):
             data = {**(data or {}), "csrf_token": self._csrf()}
         return super().post(url, data=data, files=files, **kwargs)
