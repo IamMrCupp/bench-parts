@@ -166,13 +166,34 @@
       }
       .muted { color: var(--muted); }
 
+      /* Stock controls: three one-line forms. On a tablet each is tap the
+         field, type a number, tap the button. */
+      .stock-controls { display: grid; gap: 0.75rem; margin: 0 0 1.5rem; }
+      .stock-control {
+        display: grid;
+        grid-template-columns: 6rem 1fr auto;
+        gap: 0.5rem;
+        align-items: end;
+        padding: 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+      .stock-control label { margin: 0; align-self: center; }
+      .stock-control input[name="ticket_ref"] { grid-column: 2; }
+      .stock-control button { width: auto; padding: 0 1.25rem; min-height: var(--touch); grid-column: 3; grid-row: 1; }
+      @media (max-width: 30rem) {
+        .stock-control { grid-template-columns: 1fr; }
+        .stock-control button, .stock-control input[name="ticket_ref"] { grid-column: 1; grid-row: auto; }
+      }
+
       @media (prefers-color-scheme: dark) {
         :root {
           --ink: #e9ecf1; --muted: #9aa3ad; --line: #3a414b;
           --bg: #16181c; --accent: #7fb2f0; --bad: #f08a8a;
           --ok: #5fce86; --low: #e0a44a; --out: #f08a8a;
         }
-        input, textarea, select, fieldset, table, nav a { background: #1e2126; }
+        input, textarea, select, fieldset, table, nav a, .stock-control { background: #1e2126; }
         nav a[aria-current="page"] { background: var(--accent); color: #10131a; }
         button { color: #10131a; }
         .error { background: #2a1c1e; }

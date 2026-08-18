@@ -17,7 +17,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from bench_parts.db import connect
-from bench_parts.forms import cents_to_dollars_field, parse_count, parse_dollars_to_cents
+from bench_parts.forms import (
+    cents_to_dollars_field,
+    parse_count,
+    parse_dollars_to_cents,
+    parse_signed_count,
+)
 from bench_parts.schema import initialise
 from bench_parts.store import Part, PartStore
 from bench_parts.vocabulary import Category
@@ -336,3 +341,44 @@ def _require_part(store: PartStore, part_id: int) -> Part:
     if part is None:
         raise HTTPException(status_code=404, detail="no such part")
     return part
+
+
+@app.post("/parts/{part_id}/movements")
+def record_movement(
+    request: Request,
+    part_id: int,
+    store: StoreDep,
+    action: Annotated[str, Form()] = "",
+    amount: Annotated[str, Form()] = "",
+    ticket_ref: Annotated[str, Form()] = "",
+) -> Response:
+    """Restock, consume, or correct — the only way the UI moves a count.
+
+    Each action writes a ledger row through the store, which moves the cached
+    quantity in the same transaction. ``restock`` and ``consume`` take a
+    positive amount (``consume`` negates it — a caller can't add stock by
+    passing a negative to "use"); ``correct`` takes a signed one.
+
+    A rejection — taking more than is on hand, a zero amount, an unknown
+    action — comes back as the detail page with a readable message and
+    nothing written, rather than a 500.
+    """
+    part = _require_part(store, part_id)
+
+    try:
+        if action == "restock":
+            store.restock(part.id, parse_count(amount, "amount", allow_zero=False))
+        elif action == "consume":
+            store.consume(
+                part.id,
+                parse_count(amount, "amount", allow_zero=False),
+                ticket_ref=ticket_ref,
+            )
+        elif action == "correct":
+            store.correct(part.id, parse_signed_count(amount, "correction"))
+        else:
+            raise ValueError(f"unknown action {action!r} — expected restock, consume or correct")
+    except ValueError as exc:
+        return _render_detail(request, store, part, error=str(exc), status_code=400)
+
+    return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
