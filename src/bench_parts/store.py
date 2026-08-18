@@ -301,6 +301,22 @@ class PartStore:
         ).fetchall()
         return [_to_movement(row) for row in rows]
 
+    def list_movements_by_ticket(self, ticket_ref: str) -> list[Movement]:
+        """Everything recorded against one job ref, oldest first.
+
+        The costing query — "what parts went into 26-0001, and what did they
+        cost at the time." A ref this service has never seen returns an empty
+        list, not an error: it's a job that used no parts, and bench-parts
+        never validates refs against intake anyway.
+        """
+        ref = _clean(ticket_ref)
+        if ref is None:
+            return []
+        rows = self._conn.execute(
+            "SELECT * FROM movements WHERE ticket_ref = ? ORDER BY id", (ref,)
+        ).fetchall()
+        return [_to_movement(row) for row in rows]
+
     # --- movements ----------------------------------------------------------
 
     def record_movement(

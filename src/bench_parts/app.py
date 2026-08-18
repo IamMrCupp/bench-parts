@@ -24,7 +24,7 @@ from fastapi.responses import (
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from bench_parts import auth
+from bench_parts import api, auth
 from bench_parts.auth import verify_password
 from bench_parts.db import connect
 from bench_parts.forms import (
@@ -210,6 +210,10 @@ def get_store() -> Iterator[PartStore]:
 
 
 StoreDep = Annotated[PartStore, Depends(get_store)]
+
+# The JSON API. Auth for it lives in `require_session` above (bearer-or-session,
+# 401 JSON); the router itself only knows about parts.
+app.include_router(api.build_router(get_store))
 
 
 @app.get("/healthz")
