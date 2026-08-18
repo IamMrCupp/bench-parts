@@ -382,3 +382,18 @@ def record_movement(
         return _render_detail(request, store, part, error=str(exc), status_code=400)
 
     return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
+
+
+@app.get("/order", response_class=HTMLResponse)
+def order_list(request: Request, store: StoreDep) -> HTMLResponse:
+    """The "to order" list — everything at or below its reorder threshold.
+
+    Most urgent first: out before low, then by how far under. Reads
+    ``store.list_below_min()``, which shares its definition of "low" with the
+    catalogue's colours, so the two pages cannot disagree about a part.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="order.html",
+        context={"parts": store.list_below_min()},
+    )

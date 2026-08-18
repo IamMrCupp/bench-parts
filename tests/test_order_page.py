@@ -105,9 +105,11 @@ def test_rows_carry_their_status_class(client, store) -> None:
 
     body = client.get("/order").text
 
-    assert "status-out" in body
-    assert "status-low" in body
-    assert "status-ok" not in body
+    # Match the row class attribute, not the substring: base.html's CSS
+    # mentions every status class on every page.
+    assert 'class="status-out"' in body
+    assert 'class="status-low"' in body
+    assert 'class="status-ok"' not in body
 
 
 def test_shows_on_hand_min_and_shortfall(client, store) -> None:
