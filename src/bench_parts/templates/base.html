@@ -129,6 +129,17 @@
         background: #fff;
       }
       nav a[aria-current="page"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+      /* Secondary action: must not compete with the primary button on a page. */
+      nav .signout { margin-left: auto; }
+      nav .signout button {
+        width: auto;
+        background: transparent;
+        color: var(--muted);
+        border-color: var(--line);
+        font-weight: 400;
+        min-height: var(--touch);
+        padding: 0 1rem;
+      }
 
       /* Search + filter row: inputs stay tappable side by side, wrap on narrow. */
       form.filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1rem; }
@@ -233,11 +244,17 @@
   <body>
     <header>
       <h1>{% block heading %}bench-parts{% endblock %}</h1>
-      <nav>
-        <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Catalogue</a>
-        <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order</a>
-        <a href="/parts/new" {% if request.url.path == "/parts/new" %}aria-current="page"{% endif %}>Add part</a>
-      </nav>
+      {% if authenticated %}
+        <nav>
+          <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Catalogue</a>
+          <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order</a>
+          <a href="/parts/new" {% if request.url.path == "/parts/new" %}aria-current="page"{% endif %}>Add part</a>
+          <form method="post" action="/logout" class="signout">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit">Sign out</button>
+          </form>
+        </nav>
+      {% endif %}
     </header>
     <main>
       {% block content %}{% endblock %}

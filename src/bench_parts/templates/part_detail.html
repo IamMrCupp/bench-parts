@@ -36,6 +36,7 @@
      write a ledger row — this is the only way the UI moves a count. #}
   <div class="stock-controls">
     <form method="post" action="/parts/{{ part.id }}/movements" class="stock-control">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <input type="hidden" name="action" value="restock" />
       <label for="restock-amount">Restock</label>
       <input id="restock-amount" name="amount" inputmode="numeric" pattern="[0-9]*" placeholder="qty" />
@@ -43,6 +44,7 @@
     </form>
 
     <form method="post" action="/parts/{{ part.id }}/movements" class="stock-control">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <input type="hidden" name="action" value="consume" />
       <label for="consume-amount">Use</label>
       <input id="consume-amount" name="amount" inputmode="numeric" pattern="[0-9]*" placeholder="qty" />
@@ -52,6 +54,7 @@
     </form>
 
     <form method="post" action="/parts/{{ part.id }}/movements" class="stock-control">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <input type="hidden" name="action" value="correct" />
       <label for="correct-amount">Correct <span class="hint">+ or −, e.g. -2</span></label>
       <input id="correct-amount" name="amount" inputmode="numeric" placeholder="±qty" />
@@ -81,6 +84,7 @@
 
   <h2>Edit</h2>
   <form method="post" action="/parts/{{ part.id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     {% include "_part_fields.html" %}
     <button type="submit">Save changes</button>
   </form>
