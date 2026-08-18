@@ -183,7 +183,7 @@ def test_error_preserves_everything_else_typed(client) -> None:
 def test_error_keeps_the_chosen_category_selected(client) -> None:
     body = _post(client, description="", category="capacitor").text
 
-    assert 'value="capacitor" selected' in body or 'value="capacitor"\n' in body and "selected" in body
+    assert 'value="capacitor" selected' in body
 
 
 def test_unknown_category_is_rejected(client, store) -> None:

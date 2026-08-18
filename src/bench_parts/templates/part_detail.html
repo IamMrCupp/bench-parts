@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ part.mpn or part.description }} — bench-parts{% endblock %}
+{% block heading %}{{ part.mpn or "no MPN" }}{% endblock %}
+
+{% block content %}
+  <p class="status-line">
+    <span class="count">{{ part.quantity_on_hand }}</span>
+    <span class="muted">on hand / min {{ part.min_quantity }}</span>
+    <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
+  </p>
+
+  <dl>
+    <dt>Description</dt><dd>{{ part.description }}</dd>
+    <dt>Category</dt><dd>{{ part.category.label }}</dd>
+    {% if part.manufacturer %}<dt>Manufacturer</dt><dd>{{ part.manufacturer }}</dd>{% endif %}
+    {% if part.location %}<dt>Location</dt><dd>{{ part.location }}</dd>{% endif %}
+    <dt>Unit cost</dt><dd>{{ part.unit_cost | dollars }}</dd>
+    {% if part.supplier or part.supplier_url %}
+      <dt>Supplier</dt>
+      <dd>
+        {% if part.supplier_url %}
+          <a href="{{ part.supplier_url }}" rel="noopener">{{ part.supplier or part.supplier_url }}</a>
+        {% else %}{{ part.supplier }}{% endif %}
+      </dd>
+    {% endif %}
+    {% if part.notes %}<dt>Notes</dt><dd class="address">{{ part.notes }}</dd>{% endif %}
+  </dl>
+
+  <h2>History</h2>
+  {% if movements %}
+    <table>
+      <thead><tr><th>When</th><th>What</th><th>Δ</th><th>Job</th><th>Cost then</th></tr></thead>
+      <tbody>
+        {% for m in movements | reverse %}
+          <tr>
+            <td class="muted">{{ m.created_at[:16].replace("T", " ") }}</td>
+            <td>{{ m.reason.value }}</td>
+            <td class="count">{{ "+" if m.delta > 0 else "" }}{{ m.delta }}</td>
+            <td>{{ m.ticket_ref or "" }}</td>
+            <td>{{ m.unit_cost_at_time | dollars }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No stock movements yet.</p>
+  {% endif %}
+
+  <p class="timestamps">Added {{ part.created_at[:10] }} · updated {{ part.updated_at[:10] }}</p>
+{% endblock %}

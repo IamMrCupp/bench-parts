@@ -12,13 +12,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from bench_parts.db import connect
+from bench_parts.forms import parse_count, parse_dollars_to_cents
 from bench_parts.schema import initialise
-from bench_parts.store import PartStore
+from bench_parts.store import Part, PartStore
 from bench_parts.vocabulary import Category
 
 app = FastAPI(
@@ -111,3 +112,126 @@ def catalogue(
         name="catalogue.html",
         context={"parts": parts, "q": q, "category": category},
     )
+
+
+#: Every field the add/edit forms post. Used to echo submitted values back on a
+#: rejection, so nothing typed is lost.
+_PART_FIELDS = (
+    "mpn",
+    "manufacturer",
+    "description",
+    "category",
+    "quantity_on_hand",
+    "min_quantity",
+    "unit_cost",
+    "supplier",
+    "supplier_url",
+    "location",
+    "notes",
+)
+
+
+def _render_part_form(
+    request: Request,
+    values: dict[str, str] | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    """Render the new-part form, optionally repopulated with a rejected attempt."""
+    return templates.TemplateResponse(
+        request=request,
+        name="part_form.html",
+        context={
+            "values": {name: (values or {}).get(name, "") for name in _PART_FIELDS},
+            "error": error,
+        },
+        status_code=status_code,
+    )
+
+
+@app.get("/parts/new", response_class=HTMLResponse)
+def new_part_form(request: Request) -> HTMLResponse:
+    """The add-a-part form."""
+    return _render_part_form(request)
+
+
+@app.post("/parts")
+def create_part(
+    request: Request,
+    store: StoreDep,
+    mpn: Annotated[str, Form()] = "",
+    manufacturer: Annotated[str, Form()] = "",
+    description: Annotated[str, Form()] = "",
+    category: Annotated[str, Form()] = "",
+    quantity_on_hand: Annotated[str, Form()] = "",
+    min_quantity: Annotated[str, Form()] = "",
+    unit_cost: Annotated[str, Form()] = "",
+    supplier: Annotated[str, Form()] = "",
+    supplier_url: Annotated[str, Form()] = "",
+    location: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+) -> Response:
+    """Create a part from the submitted form.
+
+    **Redirects rather than rendering.** Showing the new part straight from the
+    POST means a refresh re-submits — and on a tablet being handed around,
+    that's a realistic way to end up with the same part twice.
+
+    Every value arrives as a string, and untouched optional fields arrive as
+    ``""``; the store normalises those to ``None``. Number and money parsing
+    happen here (``bench_parts.forms``) so the store never sees a float.
+
+    A rejection hands the form back with everything still in it — the person
+    is at a bench; making them re-type a supplier URL because they forgot the
+    description is a worse failure than the validation error itself.
+    """
+    submitted = {
+        "mpn": mpn,
+        "manufacturer": manufacturer,
+        "description": description,
+        "category": category,
+        "quantity_on_hand": quantity_on_hand,
+        "min_quantity": min_quantity,
+        "unit_cost": unit_cost,
+        "supplier": supplier,
+        "supplier_url": supplier_url,
+        "location": location,
+        "notes": notes,
+    }
+
+    try:
+        part = store.create_part(
+            mpn=mpn,
+            manufacturer=manufacturer,
+            description=description,
+            category=category,
+            quantity_on_hand=parse_count(quantity_on_hand, "opening quantity"),
+            min_quantity=parse_count(min_quantity, "minimum quantity"),
+            unit_cost=parse_dollars_to_cents(unit_cost),
+            supplier=supplier,
+            supplier_url=supplier_url,
+            location=location,
+            notes=notes,
+        )
+    except ValueError as exc:
+        return _render_part_form(request, values=submitted, error=str(exc), status_code=400)
+
+    return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
+
+
+@app.get("/parts/{part_id}", response_class=HTMLResponse)
+def part_detail(request: Request, part_id: int, store: StoreDep) -> HTMLResponse:
+    """One part. A minimal page for now — A.3 adds edit and movement history."""
+    part = _require_part(store, part_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="part_detail.html",
+        context={"part": part, "movements": store.list_movements(part.id)},
+    )
+
+
+def _require_part(store: PartStore, part_id: int) -> Part:
+    part = store.get_part(part_id)
+    if part is None:
+        raise HTTPException(status_code=404, detail="no such part")
+    return part
