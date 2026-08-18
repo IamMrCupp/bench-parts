@@ -8,7 +8,7 @@ is what benchhud's `InventorySource` will code against.
 import pytest
 from fastapi.testclient import TestClient
 
-from bench_parts.api import PART_KEYS, MOVEMENT_KEYS, to_api_part
+from bench_parts.api import MOVEMENT_KEYS, PART_KEYS, to_api_part
 from bench_parts.app import app
 from bench_parts.auth import API_TOKEN_ENV_VAR
 
