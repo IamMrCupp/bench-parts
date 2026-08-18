@@ -47,5 +47,14 @@
     <p class="empty">No stock movements yet.</p>
   {% endif %}
 
+  <h2>Edit</h2>
+  {% if error %}
+    <p class="error" role="alert">{{ error }}</p>
+  {% endif %}
+  <form method="post" action="/parts/{{ part.id }}">
+    {% include "_part_fields.html" %}
+    <button type="submit">Save changes</button>
+  </form>
+
   <p class="timestamps">Added {{ part.created_at[:10] }} · updated {{ part.updated_at[:10] }}</p>
 {% endblock %}

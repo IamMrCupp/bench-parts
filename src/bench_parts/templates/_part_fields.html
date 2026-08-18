@@ -1,0 +1,63 @@
+{# The catalogue fields, shared by the add form and the edit form so the two
+   can't drift. Expects `values` (strings, cost in dollars) in context.
+   Deliberately has NO quantity field: opening stock is a separate block on the
+   add form only, and stock otherwise moves through movements. #}
+
+<fieldset>
+  <legend>What it is</legend>
+
+  <label for="description">Description
+    <span class="hint">e.g. Dual N-channel MOSFET, 20V — what you'd read off the reel</span>
+  </label>
+  <input id="description" name="description" value="{{ values.description }}"
+         required autocapitalize="sentences" />
+
+  <label for="category">Category</label>
+  <select id="category" name="category">
+    {% for c in categories %}
+      <option value="{{ c.value }}" {% if c.value == values.category %}selected{% endif %}>{{ c.label }}</option>
+    {% endfor %}
+  </select>
+
+  <label for="mpn">Manufacturer part number
+    <span class="hint">Optional — salvaged and generic parts often have none</span>
+  </label>
+  <input id="mpn" name="mpn" value="{{ values.mpn }}"
+         autocapitalize="characters" autocorrect="off" spellcheck="false" />
+
+  <label for="manufacturer">Manufacturer <span class="hint">Optional</span></label>
+  <input id="manufacturer" name="manufacturer" value="{{ values.manufacturer }}" />
+</fieldset>
+
+<fieldset>
+  <legend>Stock rules</legend>
+
+  <label for="min_quantity">Reorder at
+    <span class="hint">At or below this, it shows on the "to order" list. 0 = don't flag.</span>
+  </label>
+  <input id="min_quantity" name="min_quantity" value="{{ values.min_quantity }}"
+         inputmode="numeric" pattern="[0-9]*" placeholder="0" />
+
+  <label for="location">Location <span class="hint">Bin, drawer, shelf</span></label>
+  <input id="location" name="location" value="{{ values.location }}" />
+</fieldset>
+
+<fieldset>
+  <legend>Buying it</legend>
+
+  <label for="unit_cost">Unit cost <span class="hint">Dollars, e.g. 1.87. Optional.</span></label>
+  <input id="unit_cost" name="unit_cost" value="{{ values.unit_cost }}"
+         inputmode="decimal" placeholder="0.00" />
+
+  <label for="supplier">Supplier <span class="hint">Optional</span></label>
+  <input id="supplier" name="supplier" value="{{ values.supplier }}" />
+
+  <label for="supplier_url">Supplier link
+    <span class="hint">Optional — the "to order" list links straight to it</span>
+  </label>
+  <input id="supplier_url" name="supplier_url" value="{{ values.supplier_url }}"
+         type="url" inputmode="url" autocapitalize="off" autocorrect="off" />
+
+  <label for="notes">Notes <span class="hint">Optional</span></label>
+  <textarea id="notes" name="notes">{{ values.notes }}</textarea>
+</fieldset>
