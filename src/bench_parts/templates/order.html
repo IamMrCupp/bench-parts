@@ -6,7 +6,7 @@
 {% block content %}
   {% if parts %}
     <p class="muted">{{ parts | length }} part{{ "s" if parts | length != 1 else "" }} at or below their reorder threshold — most urgent first.</p>
-    <table>
+    <table class="parts">
       <thead>
         <tr>
           <th>MPN</th>
@@ -22,16 +22,16 @@
             <td class="mpn">
               <a href="/parts/{{ part.id }}"{% if not part.mpn %} class="muted"{% endif %}>{{ part.mpn or "no MPN" }}</a>
             </td>
-            <td>
+            <td class="desc">
               {{ part.description }}
               {% if part.location %}<span class="hint">{{ part.location }}</span>{% endif %}
             </td>
-            <td>
+            <td class="stock">
               <span class="count">{{ part.quantity_on_hand }}</span>
               <span class="muted">/ min {{ part.min_quantity }}</span>
               <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
             </td>
-            <td class="count">
+            <td class="count short">
               {# How many to buy to get back to the threshold. For a min-0 part
                  that's hit zero there's no threshold to reach, so just say so. #}
               {% set short = part.min_quantity - part.quantity_on_hand %}
@@ -39,7 +39,7 @@
               {% elif part.min_quantity > 0 %}<span class="muted">at min</span>
               {% else %}<span class="muted">—</span>{% endif %}
             </td>
-            <td>
+            <td class="supplier">
               {% if part.supplier_url %}
                 <a href="{{ part.supplier_url }}" rel="noopener">{{ part.supplier or "order" }} ↗</a>
               {% elif part.supplier %}

@@ -187,6 +187,36 @@
         .stock-control button, .stock-control input[name="ticket_ref"] { grid-column: 1; grid-row: auto; }
       }
 
+      /* Narrow screens (a phone in a shop pocket): the list tables overflow,
+         and the count — the one thing you're looking for — ends up off-screen
+         to the right. Below this width each row becomes a stacked card with
+         MPN and count on the first line, description beneath. The status
+         border stays on the card. Category is dropped: it's a filter anyway. */
+      @media (max-width: 40rem) {
+        table.parts, table.parts tbody, table.parts tr, table.parts td { display: block; }
+        table.parts thead { display: none; }
+        table.parts tr {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 0.15rem 0.75rem;
+          padding: 0.6rem 0.75rem;
+          border-bottom: 1px solid var(--line);
+        }
+        table.parts td { padding: 0; border: 0; }
+        table.parts td.mpn   { grid-column: 1; grid-row: 1; }
+        table.parts td.stock { grid-column: 2; grid-row: 1 / span 2; text-align: right; align-self: center; }
+        table.parts td.desc  { grid-column: 1; grid-row: 2; }
+        table.parts td.loc   { grid-column: 1; grid-row: 3; color: var(--muted); font-size: 0.9rem; }
+        table.parts td.cat   { display: none; }
+        /* Order page: shortfall and supplier on one line under the description. */
+        table.parts td.short    { grid-column: 1; grid-row: 3; }
+        table.parts td.short::before { content: "Short by "; color: var(--muted); font-weight: 400; font-size: 0.9rem; }
+        table.parts td.supplier { grid-column: 2; grid-row: 3; text-align: right; }
+        table.parts td.stock .muted { display: block; font-size: 0.85rem; }
+        table.parts td.mpn a, table.parts td.mpn span { min-height: 0; line-height: 1.4; }
+        main, header { max-width: none; }
+      }
+
       @media (prefers-color-scheme: dark) {
         :root {
           --ink: #e9ecf1; --muted: #9aa3ad; --line: #3a414b;

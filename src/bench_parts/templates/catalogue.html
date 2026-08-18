@@ -19,7 +19,7 @@
   </form>
 
   {% if parts %}
-    <table>
+    <table class="parts">
       <thead>
         <tr>
           <th>MPN</th>
@@ -41,10 +41,10 @@
                 <a href="/parts/{{ part.id }}" class="muted">no MPN</a>
               {% endif %}
             </td>
-            <td>{{ part.description }}</td>
-            <td>{{ part.category.label }}</td>
-            <td>{{ part.location or "" }}</td>
-            <td>
+            <td class="desc">{{ part.description }}</td>
+            <td class="cat">{{ part.category.label }}</td>
+            <td class="loc">{{ part.location or "" }}</td>
+            <td class="stock">
               <span class="count">{{ part.quantity_on_hand }}</span>
               <span class="muted">/ min {{ part.min_quantity }}</span>
               <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
