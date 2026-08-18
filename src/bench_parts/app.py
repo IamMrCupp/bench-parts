@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from bench_parts.db import connect
-from bench_parts.forms import parse_count, parse_dollars_to_cents
+from bench_parts.forms import cents_to_dollars_field, parse_count, parse_dollars_to_cents
 from bench_parts.schema import initialise
 from bench_parts.store import Part, PartStore
 from bench_parts.vocabulary import Category
@@ -219,15 +219,116 @@ def create_part(
     return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
 
 
-@app.get("/parts/{part_id}", response_class=HTMLResponse)
-def part_detail(request: Request, part_id: int, store: StoreDep) -> HTMLResponse:
-    """One part. A minimal page for now — A.3 adds edit and movement history."""
-    part = _require_part(store, part_id)
+#: The catalogue fields the edit form can change. Deliberately excludes
+#: ``quantity_on_hand`` — stock moves only through movements — so a smuggled
+#: quantity in the POST body is simply never read.
+_EDIT_FIELDS = tuple(f for f in _PART_FIELDS if f != "quantity_on_hand")
+
+
+def _edit_values(part: Part) -> dict[str, str]:
+    """The part as the edit form wants it: strings, cost in dollars."""
+    return {
+        "mpn": part.mpn or "",
+        "manufacturer": part.manufacturer or "",
+        "description": part.description,
+        "category": part.category.value,
+        "min_quantity": str(part.min_quantity),
+        "unit_cost": cents_to_dollars_field(part.unit_cost),
+        "supplier": part.supplier or "",
+        "supplier_url": part.supplier_url or "",
+        "location": part.location or "",
+        "notes": part.notes or "",
+    }
+
+
+def _render_detail(
+    request: Request,
+    store: PartStore,
+    part: Part,
+    values: dict[str, str] | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    """The detail page. On a rejected edit, ``values`` carries the attempt so
+    nothing typed is lost — and the part's own info and history still render,
+    rather than the page collapsing to a bare form."""
     return templates.TemplateResponse(
         request=request,
         name="part_detail.html",
-        context={"part": part, "movements": store.list_movements(part.id)},
+        context={
+            "part": part,
+            "movements": store.list_movements(part.id),
+            "values": values or _edit_values(part),
+            "error": error,
+        },
+        status_code=status_code,
     )
+
+
+@app.get("/parts/{part_id}", response_class=HTMLResponse)
+def part_detail(request: Request, part_id: int, store: StoreDep) -> HTMLResponse:
+    """Everything about one part: the count, the catalogue fields (editable),
+    and the movement history."""
+    return _render_detail(request, store, _require_part(store, part_id))
+
+
+@app.post("/parts/{part_id}")
+def edit_part(
+    request: Request,
+    part_id: int,
+    store: StoreDep,
+    mpn: Annotated[str, Form()] = "",
+    manufacturer: Annotated[str, Form()] = "",
+    description: Annotated[str, Form()] = "",
+    category: Annotated[str, Form()] = "",
+    min_quantity: Annotated[str, Form()] = "",
+    unit_cost: Annotated[str, Form()] = "",
+    supplier: Annotated[str, Form()] = "",
+    supplier_url: Annotated[str, Form()] = "",
+    location: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+) -> Response:
+    """Edit the catalogue fields. **Cannot change stock.**
+
+    There is no ``quantity_on_hand`` parameter here on purpose: FastAPI simply
+    never reads one from the body, so a client that smuggles it in changes
+    nothing. Stock moves through the movement controls, which write a ledger
+    row. ``min_quantity`` *is* editable — a threshold is policy, not a count.
+    """
+    part = _require_part(store, part_id)
+    submitted = {
+        "mpn": mpn,
+        "manufacturer": manufacturer,
+        "description": description,
+        "category": category,
+        "min_quantity": min_quantity,
+        "unit_cost": unit_cost,
+        "supplier": supplier,
+        "supplier_url": supplier_url,
+        "location": location,
+        "notes": notes,
+    }
+
+    try:
+        store.update_part(
+            part.id,
+            mpn=mpn,
+            manufacturer=manufacturer,
+            description=description,
+            category=category,
+            min_quantity=parse_count(min_quantity, "reorder threshold"),
+            unit_cost=parse_dollars_to_cents(unit_cost),
+            supplier=supplier,
+            supplier_url=supplier_url,
+            location=location,
+            notes=notes,
+        )
+    except ValueError as exc:
+        return _render_detail(
+            request, store, part, values=submitted, error=str(exc), status_code=400
+        )
+
+    return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
 
 
 def _require_part(store: PartStore, part_id: int) -> Part:
