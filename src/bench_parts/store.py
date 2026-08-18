@@ -90,6 +90,12 @@ def _clean(value: object) -> str | None:
     return text or None
 
 
+def _escape_like(text: str) -> str:
+    """Escape SQL LIKE wildcards in user input so "100%" searches for a percent
+    sign rather than matching everything. Pairs with ``ESCAPE '\\'`` — see search()."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _require_text(value: object, field: str) -> str:
     text = _clean(value)
     if text is None:
@@ -228,6 +234,37 @@ class PartStore:
                 "SELECT * FROM parts WHERE category = ? ORDER BY id",
                 (to_category(category).value,),
             ).fetchall()
+        return [_to_part(row) for row in rows]
+
+    def search(self, q: object = None, category: object = None) -> list[Part]:
+        """The catalogue, narrowed by a free-text query and/or a category.
+
+        ``q`` is a case-insensitive **substring** match against MPN and
+        description — you remember "IRF" and half a number, not the whole
+        thing. Blank ``q`` means no text filter. An unknown ``category`` raises,
+        same as :meth:`list_parts`.
+        """
+        text = _clean(q)
+        clauses: list[str] = []
+        params: list[object] = []
+
+        if category is not None:
+            clauses.append("category = ?")
+            params.append(to_category(category).value)
+        if text is not None:
+            clauses.append(
+                "(mpn LIKE ? ESCAPE '\\' COLLATE NOCASE"
+                " OR description LIKE ? ESCAPE '\\' COLLATE NOCASE)"
+            )
+            like = f"%{_escape_like(text)}%"
+            params.extend([like, like])
+
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self._conn.execute(
+            # The WHERE text is assembled from fixed fragments; every user value is bound.
+            f"SELECT * FROM parts{where} ORDER BY id",
+            tuple(params),
+        ).fetchall()
         return [_to_part(row) for row in rows]
 
     def list_below_min(self) -> list[Part]:

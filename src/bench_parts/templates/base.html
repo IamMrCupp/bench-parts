@@ -115,13 +115,65 @@
       .empty { color: var(--muted); }
       .timestamps { color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }
 
+      /* Nav: this is how a tablet gets around. Each link is a full touch target. */
+      nav { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1rem; }
+      nav a {
+        display: inline-block;
+        min-height: var(--touch);
+        line-height: var(--touch);
+        padding: 0 1rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        background: #fff;
+      }
+      nav a[aria-current="page"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+      /* Search + filter row: inputs stay tappable side by side, wrap on narrow. */
+      form.filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1rem; }
+      form.filters input[type="search"] { flex: 2 1 12rem; }
+      form.filters select { flex: 1 1 10rem; }
+      form.filters button { flex: 0 0 auto; width: auto; padding: 0 1.25rem; }
+
+      /* Stock status: the whole point of the colour-coding. A badge on the count
+         and a left border on the row, so it reads at a glance and in the
+         periphery. Keyed on Part.status — never re-derived in a template. */
+      .count { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.15rem; white-space: nowrap; }
+      .badge {
+        display: inline-block;
+        min-width: 3.2rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      tr.status-ok  { border-left: 5px solid var(--ok); }
+      tr.status-low { border-left: 5px solid var(--low); }
+      tr.status-out { border-left: 5px solid var(--out); }
+      .badge.status-ok  { background: var(--ok); }
+      .badge.status-low { background: var(--low); }
+      .badge.status-out { background: var(--out); }
+      td.mpn a { font-weight: 700; font-variant-numeric: tabular-nums; }
+      td.mpn a, td.mpn span {
+        display: inline-block;
+        min-height: var(--touch);
+        line-height: var(--touch);
+      }
+      .muted { color: var(--muted); }
+
       @media (prefers-color-scheme: dark) {
         :root {
           --ink: #e9ecf1; --muted: #9aa3ad; --line: #3a414b;
           --bg: #16181c; --accent: #7fb2f0; --bad: #f08a8a;
           --ok: #5fce86; --low: #e0a44a; --out: #f08a8a;
         }
-        input, textarea, select, fieldset, table { background: #1e2126; }
+        input, textarea, select, fieldset, table, nav a { background: #1e2126; }
+        nav a[aria-current="page"] { background: var(--accent); color: #10131a; }
         button { color: #10131a; }
         .error { background: #2a1c1e; }
       }
@@ -130,6 +182,11 @@
   <body>
     <header>
       <h1>{% block heading %}bench-parts{% endblock %}</h1>
+      <nav>
+        <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Catalogue</a>
+        <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order</a>
+        <a href="/parts/new" {% if request.url.path == "/parts/new" %}aria-current="page"{% endif %}>Add part</a>
+      </nav>
     </header>
     <main>
       {% block content %}{% endblock %}

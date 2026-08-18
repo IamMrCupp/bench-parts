@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Catalogue — bench-parts{% endblock %}
+{% block heading %}Parts{% endblock %}
+
+{% block content %}
+  <form method="get" action="/" class="filters" role="search">
+    {# type="search" gets a clear (x) button on most tablets, and no autocorrect. #}
+    <input type="search" name="q" value="{{ q }}" placeholder="MPN or description"
+           autocomplete="off" autocapitalize="off" spellcheck="false"
+           aria-label="Search parts" />
+    <select name="category" aria-label="Category">
+      <option value="">All categories</option>
+      {% for c in categories %}
+        <option value="{{ c.value }}" {% if c.value == category %}selected{% endif %}>{{ c.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Search</button>
+  </form>
+
+  {% if parts %}
+    <table>
+      <thead>
+        <tr>
+          <th>MPN</th>
+          <th>Description</th>
+          <th>Category</th>
+          <th>Location</th>
+          <th>On hand</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for part in parts %}
+          {# The status class comes from Part.status — one definition, shared with
+             the "to order" page. Never re-derive it here. #}
+          <tr class="status-{{ part.status.value }}">
+            <td class="mpn">
+              {% if part.mpn %}
+                <a href="/parts/{{ part.id }}">{{ part.mpn }}</a>
+              {% else %}
+                <a href="/parts/{{ part.id }}" class="muted">no MPN</a>
+              {% endif %}
+            </td>
+            <td>{{ part.description }}</td>
+            <td>{{ part.category.label }}</td>
+            <td>{{ part.location or "" }}</td>
+            <td>
+              <span class="count">{{ part.quantity_on_hand }}</span>
+              <span class="muted">/ min {{ part.min_quantity }}</span>
+              <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">
+      {% if q or category %}
+        No parts match. <a href="/">Clear the search</a> or <a href="/parts/new">add one</a>.
+      {% else %}
+        No parts yet — <a href="/parts/new">add the first one</a>.
+      {% endif %}
+    </p>
+  {% endif %}
+{% endblock %}
