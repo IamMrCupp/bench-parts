@@ -15,18 +15,42 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 
-def parse_count(value: str | None, field: str) -> int:
-    """A whole non-negative number. Blank means zero — "none yet" is a normal
-    answer for a count, not an error."""
+def parse_count(value: str | None, field: str, *, allow_zero: bool = True) -> int:
+    """A whole non-negative number.
+
+    With ``allow_zero`` (the default), blank means zero — "none yet" is a
+    normal answer for an opening count or a threshold. For a stock *movement*
+    pass ``allow_zero=False``: moving nothing is a mistake, and a blank amount
+    should say so rather than silently succeed.
+    """
     text = (value or "").strip()
     if not text:
-        return 0
+        if allow_zero:
+            return 0
+        raise ValueError(f"{field} is required")
     try:
         number = int(text)
     except ValueError:
         raise ValueError(f"{field} must be a whole number, got {text!r}") from None
     if number < 0:
         raise ValueError(f"{field} cannot be negative")
+    if number == 0 and not allow_zero:
+        raise ValueError(f"{field} must be at least 1")
+    return number
+
+
+def parse_signed_count(value: str | None, field: str) -> int:
+    """A whole number that may be negative — a correction goes either way.
+    Zero is rejected: a correction that corrects nothing is a mistake."""
+    text = (value or "").strip()
+    if not text:
+        raise ValueError(f"{field} is required — use a positive or negative whole number")
+    try:
+        number = int(text)
+    except ValueError:
+        raise ValueError(f"{field} must be a whole number like 3 or -2, got {text!r}") from None
+    if number == 0:
+        raise ValueError(f"{field} of 0 changes nothing")
     return number
 
 

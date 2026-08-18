@@ -27,6 +27,38 @@
     {% if part.notes %}<dt>Notes</dt><dd class="address">{{ part.notes }}</dd>{% endif %}
   </dl>
 
+  <h2>Adjust stock</h2>
+  {% if error %}
+    <p class="error" role="alert">{{ error }}</p>
+  {% endif %}
+  {# Three small forms rather than one with a mode switch: each is a single
+     tap-type-tap on a tablet, and each names exactly what it does. All three
+     write a ledger row — this is the only way the UI moves a count. #}
+  <div class="stock-controls">
+    <form method="post" action="/parts/{{ part.id }}/movements" class="stock-control">
+      <input type="hidden" name="action" value="restock" />
+      <label for="restock-amount">Restock</label>
+      <input id="restock-amount" name="amount" inputmode="numeric" pattern="[0-9]*" placeholder="qty" />
+      <button type="submit">Add</button>
+    </form>
+
+    <form method="post" action="/parts/{{ part.id }}/movements" class="stock-control">
+      <input type="hidden" name="action" value="consume" />
+      <label for="consume-amount">Use</label>
+      <input id="consume-amount" name="amount" inputmode="numeric" pattern="[0-9]*" placeholder="qty" />
+      <input name="ticket_ref" placeholder="job ref (optional)"
+             autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Job ref" />
+      <button type="submit">Use</button>
+    </form>
+
+    <form method="post" action="/parts/{{ part.id }}/movements" class="stock-control">
+      <input type="hidden" name="action" value="correct" />
+      <label for="correct-amount">Correct <span class="hint">+ or −, e.g. -2</span></label>
+      <input id="correct-amount" name="amount" inputmode="numeric" placeholder="±qty" />
+      <button type="submit">Correct</button>
+    </form>
+  </div>
+
   <h2>History</h2>
   {% if movements %}
     <table>
@@ -48,9 +80,6 @@
   {% endif %}
 
   <h2>Edit</h2>
-  {% if error %}
-    <p class="error" role="alert">{{ error }}</p>
-  {% endif %}
   <form method="post" action="/parts/{{ part.id }}">
     {% include "_part_fields.html" %}
     <button type="submit">Save changes</button>
