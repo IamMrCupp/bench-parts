@@ -83,9 +83,9 @@ def test_rows_carry_their_status_class(client, store) -> None:
 
     body = client.get("/").text
 
-    assert 'status-ok' in body
-    assert 'status-low' in body
-    assert 'status-out' in body
+    assert "status-ok" in body
+    assert "status-low" in body
+    assert "status-out" in body
 
 
 def test_a_part_without_an_mpn_still_renders(client, store) -> None:
@@ -222,3 +222,14 @@ def test_store_search_with_nothing_returns_everything(store) -> None:
 def test_store_search_rejects_unknown_category(store) -> None:
     with pytest.raises(ValueError):
         store.search(category="mosfets")
+
+
+def test_store_search_treats_like_wildcards_literally(store) -> None:
+    """A search for "100%" must not match every part — the % is escaped."""
+    store.create_part(description="100% tin solder", category="consumable", mpn="SN100")
+    store.create_part(description="Something else", category="other", mpn="X_1")
+
+    assert [p.mpn for p in store.search(q="100%")] == ["SN100"]
+    assert [p.mpn for p in store.search(q="_1")] == ["X_1"]
+    # A bare "%" finds the one part whose text literally contains one — not all of them.
+    assert [p.mpn for p in store.search(q="%")] == ["SN100"]
