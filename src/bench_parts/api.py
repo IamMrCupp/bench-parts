@@ -24,8 +24,22 @@ definition, and so ``status`` is derived exactly as the UI derives it.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, StrictInt
 
 from bench_parts.store import Movement, Part, PartStore
+
+
+class ConsumeRequest(BaseModel):
+    """Body for ``POST /api/parts/{id}/consume``.
+
+    ``StrictInt`` so ``"3"`` and ``1.5`` are rejected at the edge rather than
+    coerced — a consumer that sends the wrong type should hear about it, not
+    have its request silently reinterpreted.
+    """
+
+    quantity: StrictInt
+    ticket_ref: str | None = None
+
 
 #: The keys every Part JSON object carries — the contract a consumer codes to.
 PART_KEYS = (
@@ -168,5 +182,39 @@ def build_router(get_store) -> APIRouter:
         if not ticket_ref.strip():
             raise HTTPException(status_code=400, detail="ticket_ref is required")
         return [to_api_movement(m) for m in store.list_movements_by_ticket(ticket_ref)]
+
+    @router.post("/parts/{part_id}/consume")
+    def consume(
+        request: Request, part_id: int, body: ConsumeRequest, store: StoreDep
+    ) -> dict[str, object]:
+        """Record stock used on a job. **The same write path as the UI.**
+
+        Calls ``store.consume()`` exactly as the detail page's "Use" form does:
+        one ledger row, the cache moved in the same transaction, the unit cost
+        snapshotted. A movement recorded from the HUD is indistinguishable from
+        one recorded by hand.
+
+        ``ticket_ref`` is stored verbatim and never validated against intake —
+        loose coupling across services is the point.
+
+        **A JSON body is required, and that is the CSRF story for this route.**
+        The middleware's token check deliberately doesn't cover ``/api/`` (a
+        machine client has no session to bind a token to). But a cross-site
+        form can only send form-encoded, multipart or text/plain bodies — never
+        ``application/json`` — so it cannot ride a signed-in browser session
+        into this endpoint. FastAPI answers a form body with 422 before this
+        function runs.
+        """
+        part = _require_part(store, part_id)
+        try:
+            updated = store.consume(part.id, body.quantity, ticket_ref=body.ticket_ref)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+
+        movement = store.list_movements(part.id)[-1]
+        return {
+            "part": to_api_part(updated, str(request.base_url)),
+            "movement": to_api_movement(movement),
+        }
 
     return router
