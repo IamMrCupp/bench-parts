@@ -52,7 +52,7 @@
               {% if part.mpn %}
                 <a href="/parts/{{ part.id }}">{{ part.mpn }}</a>
               {% else %}
-                <a href="/parts/{{ part.id }}" class="muted">no MPN</a>
+                <a href="/parts/{{ part.id }}" class="muted">— no MPN —</a>
               {% endif %}
             </td>
             <td class="desc">{{ part.description }}{% if part.project %} <span class="chip project">{{ part.project }}</span>{% endif %}{% if part.retired %} <span class="badge retired-badge">retired</span>{% endif %}</td>
