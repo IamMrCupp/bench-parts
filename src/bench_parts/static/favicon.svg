@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- bench-parts: a drawer of bins. Flat, reads at 16px, and at 180px on a home screen. -->
+  <rect width="64" height="64" rx="14" fill="#1c4f8f"/>
+  <g fill="#fff">
+    <rect x="12" y="16" width="18" height="14" rx="2"/>
+    <rect x="34" y="16" width="18" height="14" rx="2"/>
+    <rect x="12" y="34" width="18" height="14" rx="2"/>
+    <rect x="34" y="34" width="18" height="14" rx="2" fill="#e0a44a"/>
+  </g>
+</svg>
