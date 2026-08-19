@@ -26,6 +26,8 @@
     <button type="submit">Search</button>
   </form>
 
+  <p class="muted export-links"><a href="/export.csv" class="chip">export parts CSV</a> <a href="/export/movements.csv" class="chip">export movements CSV</a></p>
+
   {% if retired_count %}
     <p class="muted"><a href="/?show_retired=1{% if q %}&q={{ q }}{% endif %}{% if category %}&category={{ category }}{% endif %}">Show {{ retired_count }} retired part{{ "s" if retired_count != 1 else "" }}</a></p>
   {% elif show_retired %}
