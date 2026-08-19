@@ -79,8 +79,8 @@ def test_new_categories_exist() -> None:
     assert Category.MODULE.label == "Module / Board"
 
 
-def test_schema_version_bumped() -> None:
-    assert SCHEMA_VERSION == 2
+def test_schema_version_at_least_v2() -> None:
+    assert SCHEMA_VERSION >= 2
 
 
 # --- fresh database ---------------------------------------------------------
@@ -99,7 +99,7 @@ def test_fresh_db_accepts_the_new_categories(tmp_path, monkeypatch) -> None:
 
         assert f.category is Category.FILAMENT
         assert m.category is Category.MODULE
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
 
 
 # --- the upgrade path -------------------------------------------------------
@@ -122,7 +122,7 @@ def test_upgrade_preserves_parts_and_movements(v1_db) -> None:
         part = store.get_part(1)
         movements = store.list_movements(1)
 
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     assert part is not None
     assert (part.mpn, part.quantity_on_hand, part.min_quantity, part.unit_cost) == (
         "IRF7910",
@@ -172,7 +172,7 @@ def test_upgrade_is_idempotent(v1_db) -> None:
 
         assert conn.execute("SELECT COUNT(*) FROM parts").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM movements").fetchone()[0] == 2
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
 
 
 def test_upgrade_leaves_no_scratch_table_behind(v1_db) -> None:
