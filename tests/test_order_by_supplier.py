@@ -57,8 +57,8 @@ def seeded(store):
     return dk, mo, mo2, am, none, ok
 
 
-def test_schema_is_v5() -> None:
-    assert SCHEMA_VERSION == 5
+def test_schema_is_at_least_v5() -> None:
+    assert SCHEMA_VERSION >= 5
 
 
 # --- store: new fields + order quantity ------------------------------------
@@ -161,7 +161,7 @@ def test_restock_from_order_row(client, store, seeded) -> None:
     dk, *_ = seeded
     body = client.get("/order").text
     assert f'action="/parts/{dk.id}/movements"' in body
-    assert f'name="next" value="/order"' in body
+    assert 'name="next" value="/order"' in body
 
     r = client.post(
         f"/parts/{dk.id}/movements",

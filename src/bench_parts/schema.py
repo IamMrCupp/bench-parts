@@ -25,7 +25,7 @@ import sqlite3
 
 from bench_parts.vocabulary import Category, MovementReason, sql_in_list
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 _CREATE_PARTS = f"""
@@ -73,13 +73,21 @@ CREATE TABLE IF NOT EXISTS parts (
     -- "3D printing"). Free text, matched case-insensitively; NULL = unsorted.
     project          TEXT,
 
+    -- v5: ordering. supplier_pn is the supplier's own part number (exact for
+    -- their bulk-add tools, where an MPN is ambiguous). reorder_qty is what you
+    -- actually buy — the pack, or "back to 2x min" — rather than the bare
+    -- shortfall. Both optional.
+    supplier_pn      TEXT,
+    reorder_qty      INTEGER,
+
     CONSTRAINT known_category CHECK (category IN ({sql_in_list(Category)})),
 
     -- The backstop behind the store's "can't consume more than you have" guard.
     -- If this ever fires, the cache and the log have diverged.
     CONSTRAINT quantity_not_negative CHECK (quantity_on_hand >= 0),
     CONSTRAINT min_quantity_not_negative CHECK (min_quantity >= 0),
-    CONSTRAINT unit_cost_not_negative CHECK (unit_cost IS NULL OR unit_cost >= 0)
+    CONSTRAINT unit_cost_not_negative CHECK (unit_cost IS NULL OR unit_cost >= 0),
+    CONSTRAINT reorder_qty_positive CHECK (reorder_qty IS NULL OR reorder_qty > 0)
 );
 """
 
@@ -172,6 +180,14 @@ def _upgrade_to_v4(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "parts", "project", "TEXT")
 
 
+def _upgrade_to_v5(conn: sqlite3.Connection) -> None:
+    """v4 → v5: ``supplier_pn`` and ``reorder_qty``. Add-columns, idempotent.
+    (The CHECK on reorder_qty only applies to fresh tables — ADD COLUMN can't
+    carry a table CHECK; the store validates it, which is the path that matters.)"""
+    _add_column_if_missing(conn, "parts", "supplier_pn", "TEXT")
+    _add_column_if_missing(conn, "parts", "reorder_qty", "INTEGER")
+
+
 def _migrate(conn: sqlite3.Connection, step, version: int) -> None:
     """Run one table-rebuild migration step atomically and FK-safely.
 
@@ -240,3 +256,5 @@ def initialise(conn: sqlite3.Connection) -> None:
         _migrate(conn, _upgrade_to_v3, 3)
     if current < 4:
         _migrate(conn, _upgrade_to_v4, 4)
+    if current < 5:
+        _migrate(conn, _upgrade_to_v5, 5)

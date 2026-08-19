@@ -4,54 +4,69 @@
 {% block heading %}To order{% endblock %}
 
 {% block content %}
-  {% if parts %}
-    <p class="muted">{{ parts | length }} part{{ "s" if parts | length != 1 else "" }} at or below their reorder threshold — most urgent first.</p>
-    <table class="parts">
-      <thead>
-        <tr>
-          <th>MPN</th>
-          <th>Description</th>
-          <th>On hand</th>
-          <th>Short by</th>
-          <th>Supplier</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for part in parts %}
-          <tr class="status-{{ part.status.value }}">
-            <td class="mpn">
-              <a href="/parts/{{ part.id }}"{% if not part.mpn %} class="muted"{% endif %}>{{ part.mpn or "no MPN" }}</a>
-            </td>
-            <td class="desc">
-              {{ part.description }}{% if part.project %} <span class="chip project">{{ part.project }}</span>{% endif %}
-              {% if part.location %}<span class="hint">{{ part.location }}</span>{% endif %}
-            </td>
-            <td class="stock">
-              <span class="count">{{ part.quantity_on_hand }}</span>
-              <span class="muted">/ min {{ part.min_quantity }}</span>
-              <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
-            </td>
-            <td class="count short">
-              {# How many to buy to get back to the threshold. For a min-0 part
-                 that's hit zero there's no threshold to reach, so just say so. #}
-              {% set short = part.min_quantity - part.quantity_on_hand %}
-              {% if short > 0 %}{{ short }}
-              {% elif part.min_quantity > 0 %}<span class="muted">at min</span>
-              {% else %}<span class="muted">—</span>{% endif %}
-            </td>
-            <td class="supplier">
-              {% if part.supplier_url %}
-                <a href="{{ part.supplier_url }}" rel="noopener">{{ part.supplier or "order" }} ↗</a>
-              {% elif part.supplier %}
-                {{ part.supplier }}
-              {% else %}
-                <span class="muted">—</span>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {% if groups %}
+    <p class="muted order-summary">
+      {{ total }} part{{ "s" if total != 1 else "" }} at or below their reorder threshold, by supplier — most urgent first.
+      <a href="/order.csv" class="chip">download CSV</a>
+    </p>
+
+    {% for group in groups %}
+      {% set key = group.name | lower %}
+      {% set tool = bom_tools.get(key) %}
+      {% set bulk = group.bulk_add_text() %}
+      <section class="basket">
+        <h2>{{ group.name }} <span class="muted">· {{ group.parts | length }}</span></h2>
+
+        <table class="parts">
+          <thead>
+            <tr><th>Part</th><th>Description</th><th>On hand</th><th>Order</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for part in group.parts %}
+              <tr class="status-{{ part.status.value }}">
+                <td class="mpn">
+                  <a href="/parts/{{ part.id }}"{% if not part.mpn %} class="muted"{% endif %}>{{ part.mpn or "— no MPN —" }}</a>
+                  {% if part.supplier_pn %}<span class="hint">{{ part.supplier_pn }}</span>{% endif %}
+                </td>
+                <td class="desc">
+                  {{ part.description }}{% if part.project %} <span class="chip project">{{ part.project }}</span>{% endif %}
+                  {% if part.location %}<span class="hint">{{ part.location }}</span>{% endif %}
+                </td>
+                <td class="stock">
+                  <span class="count">{{ part.quantity_on_hand }}</span>
+                  <span class="muted">/ min {{ part.min_quantity }}</span>
+                  <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
+                </td>
+                <td class="short">
+                  <span class="count">{{ part.order_qty }}</span>
+                  {% if part.supplier_url %}<a href="{{ part.supplier_url }}" rel="noopener" class="hint">open ↗</a>{% endif %}
+                </td>
+                <td class="supplier">
+                  {# Log the delivery from here, pre-filled with the order qty. #}
+                  <form method="post" action="/parts/{{ part.id }}/movements" class="restock-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <input type="hidden" name="action" value="restock" />
+                    <input type="hidden" name="next" value="/order" />
+                    <input name="amount" value="{{ part.order_qty }}" inputmode="numeric" pattern="[0-9]*" aria-label="Received quantity" />
+                    <button type="submit" class="secondary">Received</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {# Only suppliers with a known paste-a-BOM tool get the block — Amazon
+           rows link out instead; there's no cart to paste into. #}
+        {% if bulk and tool %}
+          <details class="bulk-add">
+            <summary>Paste into {{ group.name }}'s bulk-add tool — <a href="{{ tool }}" rel="noopener">open it ↗</a></summary>
+            <p class="hint">One line per part, <code>number,quantity</code>. Select all, copy, paste into the BOM / bulk-add box on their site, then check out there.</p>
+            <textarea readonly rows="{{ [group.parts | length, 8] | min }}" aria-label="Bulk-add text for {{ group.name }}">{{ bulk }}</textarea>
+          </details>
+        {% endif %}
+      </section>
+    {% endfor %}
   {% else %}
     <p class="empty">Nothing to order — everything is above its reorder threshold. <br /><a href="/">Back to the catalogue</a></p>
   {% endif %}

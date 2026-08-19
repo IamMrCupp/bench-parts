@@ -78,8 +78,9 @@ def test_lists_only_parts_at_or_below_min(client, store) -> None:
     assert "GONE-NOFLAG" in body
     assert "OK-1" not in body
     # NOFLAG (stocked, min 0) must be absent; GONE-NOFLAG (zero, min 0) present.
-    # Count the substring: it appears exactly once, inside "GONE-NOFLAG".
-    assert body.count("NOFLAG") == 1
+    # Match descriptions — MPNs now also appear in the bulk-add paste block.
+    assert "No threshold, stocked" not in body
+    assert "No threshold, gone" in body
 
 
 def test_out_comes_before_low(client, store) -> None:
@@ -93,7 +94,23 @@ def test_out_comes_before_low(client, store) -> None:
 
 
 def test_deeper_shortfall_comes_first_within_low(client, store) -> None:
-    _seed(store)
+    """Within one supplier's basket — the page is grouped by supplier now."""
+    store.create_part(
+        description="Barely",
+        category="ic",
+        mpn="LOW-BARELY",
+        quantity_on_hand=5,
+        min_quantity=5,
+        supplier="Mouser",
+    )
+    store.create_part(
+        description="Deep",
+        category="ic",
+        mpn="LOW-DEEP",
+        quantity_on_hand=1,
+        min_quantity=50,
+        supplier="Mouser",
+    )
 
     body = client.get("/order").text
 

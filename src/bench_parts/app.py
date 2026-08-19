@@ -505,6 +505,8 @@ _PART_FIELDS = (
     "location",
     "notes",
     "project",
+    "supplier_pn",
+    "reorder_qty",
 )
 
 
@@ -550,6 +552,8 @@ def create_part(
     location: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
     project: Annotated[str, Form()] = "",
+    supplier_pn: Annotated[str, Form()] = "",
+    reorder_qty: Annotated[str, Form()] = "",
 ) -> Response:
     """Create a part from the submitted form.
 
@@ -578,6 +582,8 @@ def create_part(
         "location": location,
         "notes": notes,
         "project": project,
+        "supplier_pn": supplier_pn,
+        "reorder_qty": reorder_qty,
     }
 
     try:
@@ -594,6 +600,8 @@ def create_part(
             location=location,
             notes=notes,
             project=project,
+            supplier_pn=supplier_pn,
+            reorder_qty=parse_count(reorder_qty, "reorder quantity") or None,
         )
     except ValueError as exc:
         return _render_part_form(request, store, values=submitted, error=str(exc), status_code=400)
@@ -622,6 +630,8 @@ def _edit_values(part: Part) -> dict[str, str]:
         "location": part.location or "",
         "notes": part.notes or "",
         "project": part.project or "",
+        "supplier_pn": part.supplier_pn or "",
+        "reorder_qty": str(part.reorder_qty) if part.reorder_qty else "",
     }
 
 
@@ -677,6 +687,8 @@ def edit_part(
     location: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
     project: Annotated[str, Form()] = "",
+    supplier_pn: Annotated[str, Form()] = "",
+    reorder_qty: Annotated[str, Form()] = "",
 ) -> Response:
     """Edit the catalogue fields. **Cannot change stock.**
 
@@ -698,6 +710,8 @@ def edit_part(
         "location": location,
         "notes": notes,
         "project": project,
+        "supplier_pn": supplier_pn,
+        "reorder_qty": reorder_qty,
     }
 
     try:
@@ -714,6 +728,8 @@ def edit_part(
             location=location,
             notes=notes,
             project=project,
+            supplier_pn=supplier_pn,
+            reorder_qty=parse_count(reorder_qty, "reorder quantity") or None,
         )
     except ValueError as exc:
         return _render_detail(
@@ -739,8 +755,12 @@ def record_movement(
     action: Annotated[str, Form()] = "",
     amount: Annotated[str, Form()] = "",
     ticket_ref: Annotated[str, Form()] = "",
+    next: Annotated[str, Form()] = "",
 ) -> Response:
     """Restock, consume, or correct — the only way the UI moves a count.
+
+    ``next`` lets the order page log a delivery and come straight back to the
+    list; it goes through ``_safe_next`` so it can only ever be a path here.
 
     Each action writes a ledger row through the store, which moves the cached
     quantity in the same transaction. ``restock`` and ``consume`` take a
@@ -773,21 +793,50 @@ def record_movement(
     except ValueError as exc:
         return _render_detail(request, store, part, error=str(exc), status_code=400)
 
-    return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
+    target = _safe_next(next) if next.strip() else f"/parts/{part.id}"
+    if target == "/":  # _safe_next's fallback for a hostile value — go to the part instead
+        target = f"/parts/{part.id}"
+    return RedirectResponse(url=target, status_code=303)
 
 
 @app.get("/order", response_class=HTMLResponse)
 def order_list(request: Request, store: StoreDep) -> HTMLResponse:
-    """The "to order" list — everything at or below its reorder threshold.
+    """The "to order" list as baskets — one per supplier, most urgent first
+    inside each. Each API-able supplier (Digi-Key, Mouser) gets a paste-ready
+    ``number,qty`` block for its BOM tool; Amazon rows link out; everything can
+    be restocked right from the row once it arrives.
 
-    Most urgent first: out before low, then by how far under. Reads
-    ``store.list_below_min()``, which shares its definition of "low" with the
-    catalogue's colours, so the two pages cannot disagree about a part.
+    Reads ``store.below_min_by_supplier()``, which sits on the same definition
+    of "low" as the catalogue's colours, so the two pages cannot disagree.
     """
+    groups = store.below_min_by_supplier()
     return templates.TemplateResponse(
         request=request,
         name="order.html",
-        context={"parts": store.list_below_min()},
+        context={
+            "groups": groups,
+            "total": sum(len(g.parts) for g in groups),
+            "bom_tools": _BOM_TOOLS,
+        },
+    )
+
+
+#: Where each supplier's paste-a-BOM tool lives. Keyed case-folded. A supplier
+#: not listed here gets the bulk-add text without a link (still pasteable).
+_BOM_TOOLS = {
+    "digi-key": "https://www.digikey.com/en/mylists/list/bulk-add",
+    "digikey": "https://www.digikey.com/en/mylists/list/bulk-add",
+    "mouser": "https://www.mouser.com/Tools/BOM/",
+}
+
+
+@app.get("/order.csv")
+def order_csv(store: StoreDep) -> Response:
+    """The order list as a CSV download — your data, out."""
+    return Response(
+        store.order_csv(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="bench-parts-order.csv"'},
     )
 
 
