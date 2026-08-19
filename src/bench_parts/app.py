@@ -888,3 +888,23 @@ def activity(request: Request, store: StoreDep, ticket_ref: str = "") -> HTMLRes
             "spend_cents": store.ticket_spend_cents(ref) if ref else None,
         },
     )
+
+
+@app.get("/export.csv")
+def export_parts(store: StoreDep) -> Response:
+    """Every part, every field — retired included and flagged."""
+    return Response(
+        store.export_parts_csv(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="bench-parts.csv"'},
+    )
+
+
+@app.get("/export/movements.csv")
+def export_movements(store: StoreDep) -> Response:
+    """The whole ledger — the parts alone aren't the data."""
+    return Response(
+        store.export_movements_csv(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="bench-parts-movements.csv"'},
+    )

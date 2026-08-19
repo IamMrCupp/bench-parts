@@ -442,6 +442,101 @@ class PartStore:
                 )
         return out.getvalue()
 
+    def export_parts_csv(self) -> str:
+        """Every part — retired included, flagged — with every field. Your data, out."""
+        import csv
+        import io
+
+        cols = [
+            "id",
+            "mpn",
+            "manufacturer",
+            "description",
+            "category",
+            "project",
+            "quantity_on_hand",
+            "min_quantity",
+            "status",
+            "unit_cost_cents",
+            "supplier",
+            "supplier_pn",
+            "supplier_url",
+            "reorder_qty",
+            "location",
+            "notes",
+            "retired_at",
+            "created_at",
+            "updated_at",
+        ]
+        out = io.StringIO()
+        w = csv.writer(out, lineterminator="\n")
+        w.writerow(cols)
+        for p in self.list_parts(include_retired=True):
+            w.writerow(
+                [
+                    p.id,
+                    p.mpn,
+                    p.manufacturer,
+                    p.description,
+                    p.category.value,
+                    p.project,
+                    p.quantity_on_hand,
+                    p.min_quantity,
+                    p.status.value,
+                    p.unit_cost,
+                    p.supplier,
+                    p.supplier_pn,
+                    p.supplier_url,
+                    p.reorder_qty,
+                    p.location,
+                    p.notes,
+                    p.retired_at,
+                    p.created_at,
+                    p.updated_at,
+                ]
+            )
+        return out.getvalue()
+
+    def export_movements_csv(self) -> str:
+        """The whole ledger, oldest first, each row with its part's MPN and description."""
+        import csv
+        import io
+
+        out = io.StringIO()
+        w = csv.writer(out, lineterminator="\n")
+        w.writerow(
+            [
+                "id",
+                "created_at",
+                "part_id",
+                "mpn",
+                "description",
+                "reason",
+                "delta",
+                "ticket_ref",
+                "unit_cost_cents_at_time",
+            ]
+        )
+        rows = self._conn.execute(
+            "SELECT m.*, p.mpn, p.description FROM movements m "
+            "JOIN parts p ON p.id = m.part_id ORDER BY m.id"
+        ).fetchall()
+        for r in rows:
+            w.writerow(
+                [
+                    r["id"],
+                    r["created_at"],
+                    r["part_id"],
+                    r["mpn"],
+                    r["description"],
+                    r["reason"],
+                    r["delta"],
+                    r["ticket_ref"],
+                    r["unit_cost_at_time"],
+                ]
+            )
+        return out.getvalue()
+
     def list_recent_movements(
         self, *, limit: int = 50, ticket_ref: object = None
     ) -> list[Activity]:
