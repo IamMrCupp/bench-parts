@@ -23,7 +23,7 @@
               <a href="/parts/{{ part.id }}"{% if not part.mpn %} class="muted"{% endif %}>{{ part.mpn or "no MPN" }}</a>
             </td>
             <td class="desc">
-              {{ part.description }}
+              {{ part.description }}{% if part.project %} <span class="chip project">{{ part.project }}</span>{% endif %}
               {% if part.location %}<span class="hint">{{ part.location }}</span>{% endif %}
             </td>
             <td class="stock">

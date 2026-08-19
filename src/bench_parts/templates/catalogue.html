@@ -15,6 +15,14 @@
         <option value="{{ c.value }}" {% if c.value == category %}selected{% endif %}>{{ c.label }}</option>
       {% endfor %}
     </select>
+    {% if projects %}
+    <select name="project" aria-label="Project">
+      <option value="">All projects</option>
+      {% for name in projects %}
+        <option value="{{ name }}" {% if name|lower == project|lower and project %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
     <button type="submit">Search</button>
   </form>
 
@@ -47,7 +55,7 @@
                 <a href="/parts/{{ part.id }}" class="muted">no MPN</a>
               {% endif %}
             </td>
-            <td class="desc">{{ part.description }}{% if part.retired %} <span class="badge retired-badge">retired</span>{% endif %}</td>
+            <td class="desc">{{ part.description }}{% if part.project %} <span class="chip project">{{ part.project }}</span>{% endif %}{% if part.retired %} <span class="badge retired-badge">retired</span>{% endif %}</td>
             <td class="cat">{{ part.category.label }}</td>
             <td class="loc">{{ part.location or "" }}</td>
             <td class="stock">

@@ -25,7 +25,7 @@ import sqlite3
 
 from bench_parts.vocabulary import Category, MovementReason, sql_in_list
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 _CREATE_PARTS = f"""
@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS parts (
     -- and the "to order" list but keeps every movement, so job costing stays
     -- answerable. Hard delete is only allowed with no consumption history.
     retired_at       TEXT,
+
+    -- v4: which project / area a part belongs to ("Audiophore", "bench",
+    -- "3D printing"). Free text, matched case-insensitively; NULL = unsorted.
+    project          TEXT,
 
     CONSTRAINT known_category CHECK (category IN ({sql_in_list(Category)})),
 
@@ -163,6 +167,11 @@ def _upgrade_to_v3(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "parts", "retired_at", "TEXT")
 
 
+def _upgrade_to_v4(conn: sqlite3.Connection) -> None:
+    """v3 → v4: add ``project``. Add-column, idempotent."""
+    _add_column_if_missing(conn, "parts", "project", "TEXT")
+
+
 def _migrate(conn: sqlite3.Connection, step, version: int) -> None:
     """Run one table-rebuild migration step atomically and FK-safely.
 
@@ -229,3 +238,5 @@ def initialise(conn: sqlite3.Connection) -> None:
         _migrate(conn, _upgrade_to_v2, 2)
     if current < 3:
         _migrate(conn, _upgrade_to_v3, 3)
+    if current < 4:
+        _migrate(conn, _upgrade_to_v4, 4)

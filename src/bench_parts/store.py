@@ -55,6 +55,7 @@ class Part:
     created_at: str
     updated_at: str
     retired_at: str | None = None
+    project: str | None = None
 
     @property
     def retired(self) -> bool:
@@ -147,6 +148,7 @@ class PartStore:
         supplier_url: object = None,
         location: object = None,
         notes: object = None,
+        project: object = None,
         now: str | None = None,
     ) -> Part:
         """Add a part to the catalogue.
@@ -167,8 +169,8 @@ class PartStore:
             cursor = self._conn.execute(
                 "INSERT INTO parts (mpn, manufacturer, description, category,"
                 " quantity_on_hand, min_quantity, unit_cost, supplier, supplier_url,"
-                " location, notes, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " location, notes, project, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     _clean(mpn),
                     _clean(manufacturer),
@@ -181,6 +183,7 @@ class PartStore:
                     _clean(supplier_url),
                     _clean(location),
                     _clean(notes),
+                    _clean(project),
                     stamp,
                     stamp,
                 ),
@@ -226,17 +229,24 @@ class PartStore:
         ).fetchall()
         return [_to_part(row) for row in rows]
 
-    def list_parts(self, category: object = None, *, include_retired: bool = False) -> list[Part]:
+    def list_parts(
+        self, category: object = None, *, project: object = None, include_retired: bool = False
+    ) -> list[Part]:
         """The catalogue, optionally narrowed to one category.
 
         Retired parts are excluded unless asked for — they're not stock. An
         unknown category raises rather than returning nothing — a typo'd filter
         that silently shows an empty shelf is worse than an error.
         """
-        return self.search(category=category, include_retired=include_retired)
+        return self.search(category=category, project=project, include_retired=include_retired)
 
     def search(
-        self, q: object = None, category: object = None, *, include_retired: bool = False
+        self,
+        q: object = None,
+        category: object = None,
+        *,
+        project: object = None,
+        include_retired: bool = False,
     ) -> list[Part]:
         """The catalogue, narrowed by a free-text query and/or a category.
 
@@ -254,6 +264,11 @@ class PartStore:
 
         if not include_retired:
             clauses.append("retired_at IS NULL")
+        proj = _clean(project)
+        if proj is not None:
+            # Case-insensitive: "audiophore" and "Audiophore" are one project.
+            clauses.append("project = ? COLLATE NOCASE")
+            params.append(proj)
         if category is not None:
             clauses.append("category = ?")
             params.append(to_category(category).value)
@@ -273,7 +288,7 @@ class PartStore:
         ).fetchall()
         return [_to_part(row) for row in rows]
 
-    def list_below_min(self) -> list[Part]:
+    def list_below_min(self, *, project: object = None) -> list[Part]:
         """The "to order" list — everything at or below its reorder threshold.
 
         Filtered through :func:`bench_parts.stock.is_below_min` rather than a
@@ -292,7 +307,11 @@ class PartStore:
         """
         # list_parts() already excludes retired parts — a part you no longer
         # stock must not nag you to buy it.
-        below = [p for p in self.list_parts() if is_below_min(p.quantity_on_hand, p.min_quantity)]
+        below = [
+            p
+            for p in self.list_parts(project=project)
+            if is_below_min(p.quantity_on_hand, p.min_quantity)
+        ]
         return sorted(
             below,
             key=lambda p: (
@@ -301,6 +320,18 @@ class PartStore:
                 p.id,
             ),
         )
+
+    def list_projects(self) -> list[str]:
+        """Every project name in use by a live part — distinct, case-folded,
+        sorted. Feeds the catalogue filter and the form's datalist, so an
+        existing name gets picked rather than retyped three ways."""
+        rows = self._conn.execute(
+            "SELECT project FROM parts WHERE project IS NOT NULL AND retired_at IS NULL"
+        ).fetchall()
+        seen: dict[str, str] = {}
+        for (name,) in rows:
+            seen.setdefault(name.casefold(), name)  # first spelling wins
+        return sorted(seen.values(), key=str.casefold)
 
     def list_movements(self, part_id: int) -> list[Movement]:
         """This part's ledger, oldest first."""
@@ -554,6 +585,7 @@ class PartStore:
         supplier_url: object = UNSET,
         location: object = UNSET,
         notes: object = UNSET,
+        project: object = UNSET,
         quantity_on_hand: object = UNSET,
         now: str | None = None,
     ) -> Part:
@@ -594,6 +626,7 @@ class PartStore:
             ("supplier_url", supplier_url),
             ("location", location),
             ("notes", notes),
+            ("project", project),
         ):
             if not isinstance(value, _Unset):
                 updates[field] = _clean(value)
@@ -630,6 +663,7 @@ def _to_part(row: sqlite3.Row) -> Part:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         retired_at=row["retired_at"],
+        project=row["project"],
     )
 
 

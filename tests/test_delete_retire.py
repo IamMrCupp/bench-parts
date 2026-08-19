@@ -30,8 +30,8 @@ def _part(store, **kw):
     return store.create_part(**values)
 
 
-def test_schema_is_v3() -> None:
-    assert SCHEMA_VERSION == 3
+def test_schema_is_at_least_v3() -> None:
+    assert SCHEMA_VERSION >= 3
 
 
 # --- delete -----------------------------------------------------------------
@@ -206,7 +206,7 @@ def test_v2_database_upgrades_to_v3(tmp_path, monkeypatch) -> None:
         initialise(conn)
         cols = {r[1] for r in conn.execute("PRAGMA table_info(parts)")}
         assert "retired_at" in cols
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         part = PartStore(conn).get_part(1)
         assert part.quantity_on_hand == 3
         assert part.retired_at is None
@@ -216,7 +216,7 @@ def test_v3_migration_is_idempotent(store) -> None:
     initialise(store._conn)
     initialise(store._conn)
 
-    assert store._conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert store._conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     with pytest.raises(sqlite3.OperationalError):
         # Proves the column exists exactly once — a second ADD would fail.
         store._conn.execute("ALTER TABLE parts ADD COLUMN retired_at TEXT")

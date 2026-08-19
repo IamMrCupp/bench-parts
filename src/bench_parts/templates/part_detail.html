@@ -24,6 +24,7 @@
   <dl>
     <dt>Description</dt><dd>{{ part.description }}</dd>
     <dt>Category</dt><dd>{{ part.category.label }}</dd>
+    {% if part.project %}<dt>Project</dt><dd><span class="chip project">{{ part.project }}</span></dd>{% endif %}
     {% if part.manufacturer %}<dt>Manufacturer</dt><dd>{{ part.manufacturer }}</dd>{% endif %}
     {% if part.location %}<dt>Location</dt><dd>{{ part.location }}</dd>{% endif %}
     <dt>Unit cost</dt><dd>{{ part.unit_cost | dollars }}</dd>
