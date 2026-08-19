@@ -60,6 +60,7 @@ PART_KEYS = (
     "created_at",
     "updated_at",
     "retired_at",
+    "project",
     "url",
 )
 
@@ -101,6 +102,7 @@ def to_api_part(part: Part, base_url: str) -> dict[str, object]:
         "updated_at": part.updated_at,
         # null = live. Retired parts are hidden from listings unless asked for.
         "retired_at": part.retired_at,
+        "project": part.project,
         # A deep link into the web UI, behind its own login. Handy from a HUD.
         "url": f"{base_url.rstrip('/')}/parts/{part.id}",
     }
@@ -141,6 +143,7 @@ def build_router(get_store) -> APIRouter:
         below_min: bool = False,
         q: str = "",
         category: str = "",
+        project: str = "",
         include_retired: bool = False,
     ) -> list[dict[str, object]]:
         """The catalogue, or with ``?below_min=1`` the "to order" set.
@@ -152,16 +155,24 @@ def build_router(get_store) -> APIRouter:
         """
         try:
             parts = (
-                store.list_below_min()
+                store.list_below_min(project=project or None)
                 if below_min
                 else store.search(
-                    q=q or None, category=category or None, include_retired=include_retired
+                    q=q or None,
+                    category=category or None,
+                    project=project or None,
+                    include_retired=include_retired,
                 )
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         base = str(request.base_url)
         return [to_api_part(p, base) for p in parts]
+
+    @router.get("/projects")
+    def list_projects(store: StoreDep) -> list[str]:
+        """Every project name in use — for a consumer's filter UI."""
+        return store.list_projects()
 
     @router.get("/parts/{part_id}")
     def get_part(request: Request, part_id: int, store: StoreDep) -> dict[str, object]:

@@ -317,6 +317,7 @@ def catalogue(
     store: StoreDep,
     q: str = "",
     category: str = "",
+    project: str = "",
     show_retired: str = "",
 ) -> HTMLResponse:
     """The catalogue — the primary screen.
@@ -329,7 +330,10 @@ def catalogue(
     include_retired = show_retired not in ("", "0")
     try:
         parts = store.search(
-            q=q or None, category=category or None, include_retired=include_retired
+            q=q or None,
+            category=category or None,
+            project=project or None,
+            include_retired=include_retired,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
@@ -349,6 +353,8 @@ def catalogue(
             "parts": parts,
             "q": q,
             "category": category,
+            "project": project,
+            "projects": store.list_projects(),
             "show_retired": include_retired,
             "retired_count": retired_count,
         },
@@ -369,11 +375,13 @@ _PART_FIELDS = (
     "supplier_url",
     "location",
     "notes",
+    "project",
 )
 
 
 def _render_part_form(
     request: Request,
+    store: PartStore,
     values: dict[str, str] | None = None,
     error: str | None = None,
     status_code: int = 200,
@@ -385,15 +393,16 @@ def _render_part_form(
         context={
             "values": {name: (values or {}).get(name, "") for name in _PART_FIELDS},
             "error": error,
+            "projects": store.list_projects(),
         },
         status_code=status_code,
     )
 
 
 @app.get("/parts/new", response_class=HTMLResponse)
-def new_part_form(request: Request) -> HTMLResponse:
+def new_part_form(request: Request, store: StoreDep) -> HTMLResponse:
     """The add-a-part form."""
-    return _render_part_form(request)
+    return _render_part_form(request, store)
 
 
 @app.post("/parts")
@@ -411,6 +420,7 @@ def create_part(
     supplier_url: Annotated[str, Form()] = "",
     location: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    project: Annotated[str, Form()] = "",
 ) -> Response:
     """Create a part from the submitted form.
 
@@ -438,6 +448,7 @@ def create_part(
         "supplier_url": supplier_url,
         "location": location,
         "notes": notes,
+        "project": project,
     }
 
     try:
@@ -453,9 +464,10 @@ def create_part(
             supplier_url=supplier_url,
             location=location,
             notes=notes,
+            project=project,
         )
     except ValueError as exc:
-        return _render_part_form(request, values=submitted, error=str(exc), status_code=400)
+        return _render_part_form(request, store, values=submitted, error=str(exc), status_code=400)
 
     return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
 
@@ -479,6 +491,7 @@ def _edit_values(part: Part) -> dict[str, str]:
         "supplier_url": part.supplier_url or "",
         "location": part.location or "",
         "notes": part.notes or "",
+        "project": part.project or "",
     }
 
 
@@ -505,6 +518,7 @@ def _render_detail(
             "deletable": not any(m.reason.value == "consume" for m in movements),
             "values": values or _edit_values(part),
             "error": error,
+            "projects": store.list_projects(),
         },
         status_code=status_code,
     )
@@ -532,6 +546,7 @@ def edit_part(
     supplier_url: Annotated[str, Form()] = "",
     location: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    project: Annotated[str, Form()] = "",
 ) -> Response:
     """Edit the catalogue fields. **Cannot change stock.**
 
@@ -552,6 +567,7 @@ def edit_part(
         "supplier_url": supplier_url,
         "location": location,
         "notes": notes,
+        "project": project,
     }
 
     try:
@@ -567,6 +583,7 @@ def edit_part(
             supplier_url=supplier_url,
             location=location,
             notes=notes,
+            project=project,
         )
     except ValueError as exc:
         return _render_detail(

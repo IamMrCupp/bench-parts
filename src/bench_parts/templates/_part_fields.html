@@ -27,6 +27,15 @@
 
   <label for="manufacturer">Manufacturer <span class="hint">Optional</span></label>
   <input id="manufacturer" name="manufacturer" value="{{ values.manufacturer }}" />
+
+  <label for="project">Project
+    <span class="hint">Optional — Audiophore, bench, 3D printing… pick an existing one to keep names consistent</span>
+  </label>
+  <input id="project" name="project" value="{{ values.project }}" list="project-names"
+         autocapitalize="words" autocorrect="off" />
+  <datalist id="project-names">
+    {% for name in projects %}<option value="{{ name }}"></option>{% endfor %}
+  </datalist>
 </fieldset>
 
 <fieldset>
