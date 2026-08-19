@@ -26,7 +26,7 @@ def seeded(store):
 
 
 def test_recent_movements_newest_first_with_part_info(store, seeded) -> None:
-    a, b = seeded
+    a, _ = seeded
     rows = store.list_recent_movements(limit=10)
 
     assert [r.movement.delta for r in rows] == [-1, 5, -1, -3, 5, 10]
