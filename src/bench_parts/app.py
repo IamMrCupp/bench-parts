@@ -819,3 +819,23 @@ def delete_part(request: Request, part_id: int, store: StoreDep) -> Response:
         return _render_detail(request, store, part, error=str(exc), status_code=400)
     flash(request, f"Deleted {part.mpn or part.description}")
     return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/activity", response_class=HTMLResponse)
+def activity(request: Request, store: StoreDep, ticket_ref: str = "") -> HTMLResponse:
+    """The ledger, newest first, across every part.
+
+    Answers "what did I do yesterday" and — with ``?ticket_ref=`` — "what went
+    into 26-0001 and what did it cost", without the API.
+    """
+    ref = ticket_ref.strip()
+    rows = store.list_recent_movements(limit=200, ticket_ref=ref or None)
+    return templates.TemplateResponse(
+        request=request,
+        name="activity.html",
+        context={
+            "rows": rows,
+            "ticket_ref": ref,
+            "spend_cents": store.ticket_spend_cents(ref) if ref else None,
+        },
+    )

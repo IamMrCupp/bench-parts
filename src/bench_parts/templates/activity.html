@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Activity — bench-parts{% endblock %}
+{% block heading %}{% if ticket_ref %}Job {{ ticket_ref }}{% else %}Activity{% endif %}{% endblock %}
+
+{% block content %}
+  {% if ticket_ref %}
+    <p class="status-line">
+      <span class="count">{{ spend_cents | dollars }}</span>
+      <span class="muted">in parts on {{ ticket_ref }}</span>
+      <a href="/activity" class="chip">all activity</a>
+    </p>
+  {% else %}
+    <p class="muted">Every stock movement, newest first. Tap a job ref to see what went into it.</p>
+  {% endif %}
+
+  {% if rows %}
+    <table class="parts activity">
+      <thead>
+        <tr><th>When</th><th>Part</th><th>What</th><th>Δ</th><th>Job</th><th>Cost then</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr class="reason-{{ r.movement.reason.value }}">
+            <td class="when muted">{{ r.movement.created_at[:16].replace("T", " ") }}</td>
+            <td class="mpn">
+              <a href="/parts/{{ r.part.id }}">{{ r.part.mpn or r.part.description }}</a>
+              {% if r.part.mpn %}<span class="hint">{{ r.part.description }}</span>{% endif %}
+            </td>
+            <td class="desc">{{ r.movement.reason.value }}</td>
+            <td class="stock"><span class="count">{{ "+" if r.movement.delta > 0 else "" }}{{ r.movement.delta }}</span></td>
+            <td class="loc">{% if r.movement.ticket_ref %}<a href="/activity?ticket_ref={{ r.movement.ticket_ref }}">{{ r.movement.ticket_ref }}</a>{% endif %}</td>
+            <td class="supplier">{{ r.movement.unit_cost_at_time | dollars }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No activity yet{% if ticket_ref %} on {{ ticket_ref }}{% endif %}.</p>
+  {% endif %}
+{% endblock %}
