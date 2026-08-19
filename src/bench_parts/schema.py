@@ -25,7 +25,7 @@ import sqlite3
 
 from bench_parts.vocabulary import Category, MovementReason, sql_in_list
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 _CREATE_PARTS = f"""
@@ -116,6 +116,65 @@ _CREATE_MOVEMENTS_PART_INDEX = (
 )
 
 
+def _upgrade_to_v2(conn: sqlite3.Connection) -> None:
+    """The v1 → v2 table rebuild — extend the category CHECK (Filament, Module).
+
+    Called inside an explicit transaction with foreign keys OFF (see
+    :func:`_migrate`); this function only does the DDL/DML. Rows are copied
+    **preserving ids** — movements reference parts by id, and renumbering would
+    orphan the ledger. ``_CREATE_PARTS`` is reused with the table name swapped,
+    so the rebuilt table is always exactly the current schema: no second copy of
+    the DDL to drift.
+    """
+    conn.execute(
+        _CREATE_PARTS.replace("CREATE TABLE IF NOT EXISTS parts", "CREATE TABLE parts_new")
+    )
+    columns = (
+        "id, mpn, manufacturer, description, category, quantity_on_hand, min_quantity,"
+        " unit_cost, supplier, supplier_url, location, notes, created_at, updated_at"
+    )
+    conn.execute(f"INSERT INTO parts_new ({columns}) SELECT {columns} FROM parts")
+    conn.execute("DROP TABLE parts")
+    conn.execute("ALTER TABLE parts_new RENAME TO parts")
+    conn.execute(_CREATE_PARTS_MPN_INDEX)
+    conn.execute(_CREATE_PARTS_CATEGORY_INDEX)
+
+
+def _migrate(conn: sqlite3.Connection, step, version: int) -> None:
+    """Run one table-rebuild migration step atomically and FK-safely.
+
+    Two SQLite facts shape this, both learned by a failing test:
+
+    1. **``DROP TABLE`` cascades.** It's an implicit ``DELETE``, so with foreign
+       keys on it would wipe every movement — and ``defer_foreign_keys`` does
+       *not* help. The documented procedure is ``PRAGMA foreign_keys = OFF``
+       around the rebuild, then ``PRAGMA foreign_key_check`` afterwards. That
+       pragma is a no-op inside a transaction, so it has to be set first.
+    2. **Python's ``sqlite3`` does not open a transaction for DDL** (legacy
+       isolation), so ``with conn:`` would leave a half-built ``parts_new``
+       behind on failure. An explicit ``BEGIN IMMEDIATE`` / ``COMMIT`` /
+       ``ROLLBACK`` makes the rebuild genuinely atomic.
+    """
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            step(conn)
+            conn.execute(f"PRAGMA user_version = {version}")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    problems = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if problems:
+        raise RuntimeError(
+            f"schema migration to v{version} left foreign-key violations: {problems}"
+        )
+
+
 def initialise(conn: sqlite3.Connection) -> None:
     """Create or upgrade the schema. Safe to call on every startup.
 
@@ -129,11 +188,19 @@ def initialise(conn: sqlite3.Connection) -> None:
     if current >= SCHEMA_VERSION:
         return
 
-    with conn:
-        conn.execute(_CREATE_PARTS)
-        conn.execute(_CREATE_PARTS_MPN_INDEX)
-        conn.execute(_CREATE_PARTS_CATEGORY_INDEX)
-        conn.execute(_CREATE_MOVEMENTS)
-        conn.execute(_CREATE_MOVEMENTS_PART_INDEX)
+    if current == 0:
+        # Fresh database: the CREATEs carry the current schema, including the
+        # v2 category list — nothing to migrate.
+        with conn:
+            conn.execute(_CREATE_PARTS)
+            conn.execute(_CREATE_PARTS_MPN_INDEX)
+            conn.execute(_CREATE_PARTS_CATEGORY_INDEX)
+            conn.execute(_CREATE_MOVEMENTS)
+            conn.execute(_CREATE_MOVEMENTS_PART_INDEX)
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        return
 
-        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    # Existing database: apply each step it's missing, in order, each one
+    # atomic on its own. A failure part-way leaves it at the last good version.
+    if current < 2:
+        _migrate(conn, _upgrade_to_v2, 2)
