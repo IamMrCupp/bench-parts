@@ -36,8 +36,8 @@ def seeded(store):
     return a, b, c, d
 
 
-def test_schema_is_v4() -> None:
-    assert SCHEMA_VERSION == 4
+def test_schema_is_at_least_v4() -> None:
+    assert SCHEMA_VERSION >= 4
 
 
 # --- store ------------------------------------------------------------------

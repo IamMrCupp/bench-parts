@@ -165,6 +165,18 @@
       .muted { color: var(--muted); }
       .empty { color: var(--muted); text-align: center; padding: var(--sp-6) var(--sp-4); background: var(--surface); border: 1px dashed var(--line-2); border-radius: var(--radius); }
       .timestamps { color: var(--muted); font-size: var(--fs-0); margin-top: var(--sp-6); }
+      /* Order page: one basket per supplier. */
+      .order-summary { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+      .basket { margin: 0 0 var(--sp-5); }
+      .basket h2 { margin-top: var(--sp-4); }
+      .restock-inline { display: flex; gap: var(--sp-1); align-items: center; }
+      .restock-inline input[name="amount"] { width: 4.5rem; min-height: 40px; padding: 0 var(--sp-2); text-align: center; }
+      .restock-inline button { width: auto; min-height: 40px; padding: 0 var(--sp-3); font-size: var(--fs-1); }
+      td.short .hint { display: block; }
+      details.bulk-add { margin: var(--sp-2) 0 0; }
+      details.bulk-add summary { cursor: pointer; min-height: var(--touch); line-height: var(--touch); font-weight: 600; color: var(--ink-2); }
+      details.bulk-add textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; background: var(--surface-2); padding: 0 0.3em; border-radius: 4px; }
 
       /* ---- messages ------------------------------------------------------------ */
       .flash { border-left: 4px solid var(--ok); background: var(--ok-bg); color: var(--ink); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-sm); margin: 0 0 var(--sp-4); font-weight: 600; }
@@ -210,7 +222,8 @@
         table.parts td.cat   { display: none; }
         table.parts td.short    { grid-column: 1; grid-row: 3; }
         table.parts td.short::before { content: "Short by "; color: var(--muted); font-weight: 400; font-size: var(--fs-1); }
-        table.parts td.supplier { grid-column: 2; grid-row: 3; text-align: right; }
+        table.parts td.supplier { grid-column: 1 / span 2; grid-row: 4; text-align: left; margin-top: var(--sp-2); }
+        .restock-inline { justify-content: flex-end; }
         table.parts td.stock .muted { display: block; font-size: var(--fs-0); }
         table.parts td.mpn a, table.parts td.mpn span { min-height: 0; line-height: 1.4; }
         tr.status-ok td:first-child, tr.status-low td:first-child, tr.status-out td:first-child { box-shadow: none; }

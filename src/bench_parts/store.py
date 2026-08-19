@@ -56,6 +56,22 @@ class Part:
     updated_at: str
     retired_at: str | None = None
     project: str | None = None
+    supplier_pn: str | None = None
+    reorder_qty: int | None = None
+
+    @property
+    def order_qty(self) -> int:
+        """How many to buy: ``reorder_qty`` if set (the pack, or a target), else
+        the shortfall back to ``min_quantity`` — and never less than one, because
+        a part that's on the order list needs *something* ordered."""
+        if self.reorder_qty:
+            return self.reorder_qty
+        return max(self.min_quantity - self.quantity_on_hand, 1)
+
+    @property
+    def order_number(self) -> str | None:
+        """What to type into the supplier's tool: their PN if known, else the MPN."""
+        return self.supplier_pn or self.mpn
 
     @property
     def retired(self) -> bool:
@@ -78,6 +94,20 @@ class Movement:
     ticket_ref: str | None
     unit_cost_at_time: int | None
     created_at: str
+
+
+@dataclass(frozen=True)
+class SupplierGroup:
+    """The "to order" parts for one supplier — a basket."""
+
+    name: str
+    parts: list[Part]
+
+    def bulk_add_text(self) -> str:
+        """``number,qty`` per line — what Digi-Key's and Mouser's paste-a-BOM
+        tools accept. Parts with no number at all are skipped (you can't paste
+        nothing)."""
+        return "\n".join(f"{p.order_number},{p.order_qty}" for p in self.parts if p.order_number)
 
 
 @dataclass(frozen=True)
@@ -131,6 +161,15 @@ def _optional_non_negative(value: object, field: str) -> int | None:
     return _require_non_negative(value, field)
 
 
+def _optional_positive(value: object, field: str) -> int | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    number = int(value)
+    if number <= 0:
+        raise ValueError(f"{field} must be at least 1, got {number}")
+    return number
+
+
 class PartStore:
     """Catalogue reads and writes over one connection.
 
@@ -158,6 +197,8 @@ class PartStore:
         location: object = None,
         notes: object = None,
         project: object = None,
+        supplier_pn: object = None,
+        reorder_qty: object = None,
         now: str | None = None,
     ) -> Part:
         """Add a part to the catalogue.
@@ -172,14 +213,15 @@ class PartStore:
         quantity_on_hand = _require_non_negative(quantity_on_hand, "quantity_on_hand")
         min_quantity = _require_non_negative(min_quantity, "min_quantity")
         unit_cost = _optional_non_negative(unit_cost, "unit_cost")
+        reorder = _optional_positive(reorder_qty, "reorder_qty")
         stamp = now or _now()
 
         with self._conn:
             cursor = self._conn.execute(
                 "INSERT INTO parts (mpn, manufacturer, description, category,"
                 " quantity_on_hand, min_quantity, unit_cost, supplier, supplier_url,"
-                " location, notes, project, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " location, notes, project, supplier_pn, reorder_qty, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     _clean(mpn),
                     _clean(manufacturer),
@@ -193,6 +235,8 @@ class PartStore:
                     _clean(location),
                     _clean(notes),
                     _clean(project),
+                    _clean(supplier_pn),
+                    reorder,
                     stamp,
                     stamp,
                 ),
@@ -348,6 +392,55 @@ class PartStore:
             "SELECT * FROM movements WHERE part_id = ? ORDER BY id", (part_id,)
         ).fetchall()
         return [_to_movement(row) for row in rows]
+
+    def below_min_by_supplier(self, *, project: object = None) -> list[SupplierGroup]:
+        """The "to order" list as baskets, one per supplier, most-urgent-first
+        inside each. Supplier names group case-insensitively ("mouser" and
+        "Mouser" are one basket; first spelling wins). Parts with no supplier
+        go last under "(no supplier)"."""
+        groups: dict[str, list[Part]] = {}
+        names: dict[str, str] = {}
+        for part in self.list_below_min(project=project):
+            key = (part.supplier or "").casefold() or "\x7f"  # sorts last
+            names.setdefault(key, part.supplier or "(no supplier)")
+            groups.setdefault(key, []).append(part)
+        ordered = sorted(groups, key=lambda k: (k == "\x7f", k))
+        return [SupplierGroup(names[k], groups[k]) for k in ordered]
+
+    def order_csv(self, *, project: object = None) -> str:
+        """The order list as CSV — one row per part, grouped by supplier."""
+        import csv
+        import io
+
+        out = io.StringIO()
+        w = csv.writer(out, lineterminator="\n")
+        w.writerow(
+            [
+                "supplier",
+                "supplier_pn",
+                "mpn",
+                "description",
+                "on_hand",
+                "min",
+                "order_qty",
+                "supplier_url",
+            ]
+        )
+        for group in self.below_min_by_supplier(project=project):
+            for p in group.parts:
+                w.writerow(
+                    [
+                        p.supplier or "",
+                        p.supplier_pn or "",
+                        p.mpn or "",
+                        p.description,
+                        p.quantity_on_hand,
+                        p.min_quantity,
+                        p.order_qty,
+                        p.supplier_url or "",
+                    ]
+                )
+        return out.getvalue()
 
     def list_recent_movements(
         self, *, limit: int = 50, ticket_ref: object = None
@@ -636,6 +729,8 @@ class PartStore:
         location: object = UNSET,
         notes: object = UNSET,
         project: object = UNSET,
+        supplier_pn: object = UNSET,
+        reorder_qty: object = UNSET,
         quantity_on_hand: object = UNSET,
         now: str | None = None,
     ) -> Part:
@@ -668,6 +763,8 @@ class PartStore:
             updates["min_quantity"] = _require_non_negative(min_quantity, "min_quantity")
         if not isinstance(unit_cost, _Unset):
             updates["unit_cost"] = _optional_non_negative(unit_cost, "unit_cost")
+        if not isinstance(reorder_qty, _Unset):
+            updates["reorder_qty"] = _optional_positive(reorder_qty, "reorder_qty")
 
         for field, value in (
             ("mpn", mpn),
@@ -677,6 +774,7 @@ class PartStore:
             ("location", location),
             ("notes", notes),
             ("project", project),
+            ("supplier_pn", supplier_pn),
         ):
             if not isinstance(value, _Unset):
                 updates[field] = _clean(value)
@@ -714,6 +812,8 @@ def _to_part(row: sqlite3.Row) -> Part:
         updated_at=row["updated_at"],
         retired_at=row["retired_at"],
         project=row["project"],
+        supplier_pn=row["supplier_pn"],
+        reorder_qty=row["reorder_qty"],
     )
 
 

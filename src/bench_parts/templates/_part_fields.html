@@ -58,8 +58,21 @@
   <input id="unit_cost" name="unit_cost" value="{{ values.unit_cost }}"
          inputmode="decimal" placeholder="0.00" />
 
-  <label for="supplier">Supplier <span class="hint">Optional</span></label>
-  <input id="supplier" name="supplier" value="{{ values.supplier }}" />
+  <label for="supplier">Supplier <span class="hint">Optional — Digi-Key, Mouser, Amazon…</span></label>
+  <input id="supplier" name="supplier" value="{{ values.supplier }}" list="supplier-names" />
+  <datalist id="supplier-names"><option value="Digi-Key"></option><option value="Mouser"></option><option value="Amazon"></option><option value="AliExpress"></option></datalist>
+
+  <label for="supplier_pn">Supplier part number
+    <span class="hint">Optional — the supplier's own number (e.g. Digi-Key <code>…-ND</code>); pastes straight into their order tool</span>
+  </label>
+  <input id="supplier_pn" name="supplier_pn" value="{{ values.supplier_pn }}"
+         autocapitalize="characters" autocorrect="off" spellcheck="false" />
+
+  <label for="reorder_qty">Reorder quantity
+    <span class="hint">Optional — how many you buy at a time (the pack). Blank = just the shortfall.</span>
+  </label>
+  <input id="reorder_qty" name="reorder_qty" value="{{ values.reorder_qty }}"
+         inputmode="numeric" pattern="[0-9]*" />
 
   <label for="supplier_url">Supplier link
     <span class="hint">Optional — the "to order" list links straight to it</span>

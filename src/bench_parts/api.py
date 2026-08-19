@@ -61,6 +61,9 @@ PART_KEYS = (
     "updated_at",
     "retired_at",
     "project",
+    "supplier_pn",
+    "reorder_qty",
+    "order_qty",
     "url",
 )
 
@@ -103,6 +106,10 @@ def to_api_part(part: Part, base_url: str) -> dict[str, object]:
         # null = live. Retired parts are hidden from listings unless asked for.
         "retired_at": part.retired_at,
         "project": part.project,
+        "supplier_pn": part.supplier_pn,
+        "reorder_qty": part.reorder_qty,
+        # How many to buy if it's on the order list: reorder_qty, else the shortfall.
+        "order_qty": part.order_qty,
         # A deep link into the web UI, behind its own login. Handy from a HUD.
         "url": f"{base_url.rstrip('/')}/parts/{part.id}",
     }
