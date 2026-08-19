@@ -9,7 +9,9 @@ from bench_parts import app as app_module
 from bench_parts.schema import SCHEMA_VERSION
 
 
-def test_startup_initialises_the_database_before_any_request(db_path) -> None:
+def test_startup_initialises_the_database_before_any_request(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "fresh.db"  # not the fixture's — that one is pre-initialised
+    monkeypatch.setenv("BENCH_PARTS_DB_PATH", str(db_path))
     assert not db_path.exists()
 
     with TestClient(app_module.app):
