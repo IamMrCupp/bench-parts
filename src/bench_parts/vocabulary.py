@@ -42,6 +42,12 @@ class Category(StrEnum):
     CABLE_WIRE = "cable_wire"
     HARDWARE_MECHANICAL = "hardware_mechanical"
     CONSUMABLE = "consumable"
+    # v2 (2026-08-19): bench-parts tracks all maker parts, not just board-repair
+    # components. Adding a member here needs a schema migration — the category
+    # CHECK is generated from this enum at table creation and SQLite can't ALTER
+    # a CHECK, so schema.py rebuilds the table. See _upgrade_to_v2 for the shape.
+    FILAMENT = "filament"
+    MODULE = "module"
     OTHER = "other"
 
     @property
@@ -68,6 +74,8 @@ _CATEGORY_LABELS: dict[Category, str] = {
     Category.CABLE_WIRE: "Cable / Wire",
     Category.HARDWARE_MECHANICAL: "Hardware / Mechanical",
     Category.CONSUMABLE: "Consumable",
+    Category.FILAMENT: "Filament",
+    Category.MODULE: "Module / Board",
     Category.OTHER: "Other",
 }
 

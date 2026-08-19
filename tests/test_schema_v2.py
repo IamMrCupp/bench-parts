@@ -57,11 +57,13 @@ def v1_db(tmp_path, monkeypatch):
         conn.executescript(_V1_PARTS)
         conn.execute(
             "INSERT INTO parts (mpn, description, category, quantity_on_hand, min_quantity,"
-            " unit_cost, created_at, updated_at) VALUES ('IRF7910','MOSFET','mosfet',7,4,187,'t','t')"
+            " unit_cost, created_at, updated_at)"
+            " VALUES ('IRF7910','MOSFET','mosfet',7,4,187,'t','t')"
         )
         conn.execute(
-            "INSERT INTO movements (part_id, delta, reason, ticket_ref, unit_cost_at_time, created_at)"
-            " VALUES (1, 10, 'initial', NULL, 187, 't'), (1, -3, 'consume', '26-0001', 187, 't')"
+            "INSERT INTO movements (part_id, delta, reason, ticket_ref, unit_cost_at_time,"
+            " created_at) VALUES (1, 10, 'initial', NULL, 187, 't'),"
+            " (1, -3, 'consume', '26-0001', 187, 't')"
         )
         conn.commit()
     return path
@@ -136,12 +138,13 @@ def test_upgrade_keeps_ids_stable(v1_db) -> None:
     """Movements reference parts by id; a rebuild that renumbered would orphan them."""
     with connect(v1_db) as conn:
         initialise(conn)
-        assert conn.execute("SELECT id FROM parts").fetchall() == [(1,)]
-        assert conn.execute("SELECT DISTINCT part_id FROM movements").fetchall() == [(1,)]
+        assert [tuple(r) for r in conn.execute("SELECT id FROM parts")] == [(1,)]
+        assert [tuple(r) for r in conn.execute("SELECT DISTINCT part_id FROM movements")] == [(1,)]
         # FK still enforced across the rebuild
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO movements (part_id, delta, reason, created_at) VALUES (999, 1, 'restock', 't')"
+                "INSERT INTO movements (part_id, delta, reason, created_at)"
+                " VALUES (999, 1, 'restock', 't')"
             )
 
 
