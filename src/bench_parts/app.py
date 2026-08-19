@@ -8,7 +8,8 @@ here assumes either exists yet.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
@@ -41,9 +42,26 @@ from bench_parts.schema import initialise
 from bench_parts.store import Part, PartStore
 from bench_parts.vocabulary import Category
 
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Create or migrate the database before the first request.
+
+    ``get_store()`` also calls ``initialise()``, so the app works without this —
+    but lazily, on the first store-touching request, and ``/healthz`` doesn't
+    touch the store. Seen on the v5 roll: pod Running, ``user_version`` still 4
+    until someone clicked. Doing it here means a broken migration fails the pod
+    at boot, in the logs, instead of on the first tap at the bench.
+    """
+    with connect(get_db_path()) as conn:
+        initialise(conn)
+    yield
+
+
 app = FastAPI(
     title="bench-parts",
     description="Self-hosted parts inventory for a board-repair bench. LAN-only.",
+    lifespan=_lifespan,
 )
 
 #: The only paths reachable without a session.
