@@ -54,6 +54,11 @@ class Part:
     notes: str | None
     created_at: str
     updated_at: str
+    retired_at: str | None = None
+
+    @property
+    def retired(self) -> bool:
+        return self.retired_at is not None
 
     @property
     def status(self) -> StockStatus:
@@ -221,23 +226,22 @@ class PartStore:
         ).fetchall()
         return [_to_part(row) for row in rows]
 
-    def list_parts(self, category: object = None) -> list[Part]:
+    def list_parts(self, category: object = None, *, include_retired: bool = False) -> list[Part]:
         """The catalogue, optionally narrowed to one category.
 
-        An unknown category raises rather than returning nothing — a typo'd
-        filter that silently shows an empty shelf is worse than an error.
+        Retired parts are excluded unless asked for — they're not stock. An
+        unknown category raises rather than returning nothing — a typo'd filter
+        that silently shows an empty shelf is worse than an error.
         """
-        if category is None:
-            rows = self._conn.execute("SELECT * FROM parts ORDER BY id").fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM parts WHERE category = ? ORDER BY id",
-                (to_category(category).value,),
-            ).fetchall()
-        return [_to_part(row) for row in rows]
+        return self.search(category=category, include_retired=include_retired)
 
-    def search(self, q: object = None, category: object = None) -> list[Part]:
+    def search(
+        self, q: object = None, category: object = None, *, include_retired: bool = False
+    ) -> list[Part]:
         """The catalogue, narrowed by a free-text query and/or a category.
+
+        Retired parts are excluded unless ``include_retired`` — see
+        :meth:`retire_part`.
 
         ``q`` is a case-insensitive **substring** match against MPN and
         description — you remember "IRF" and half a number, not the whole
@@ -248,6 +252,8 @@ class PartStore:
         clauses: list[str] = []
         params: list[object] = []
 
+        if not include_retired:
+            clauses.append("retired_at IS NULL")
         if category is not None:
             clauses.append("category = ?")
             params.append(to_category(category).value)
@@ -284,6 +290,8 @@ class PartStore:
 
         Ordered most-urgent-first: out before low, then by how far under.
         """
+        # list_parts() already excludes retired parts — a part you no longer
+        # stock must not nag you to buy it.
         below = [p for p in self.list_parts() if is_below_min(p.quantity_on_hand, p.min_quantity)]
         return sorted(
             below,
@@ -352,6 +360,10 @@ class PartStore:
         part = self.get_part(part_id)
         if part is None:
             raise LookupError(f"no part with id {part_id}")
+        if part.retired:
+            raise ValueError(
+                f"part {part_id} is retired — unretire it first if you're stocking it again"
+            )
 
         # Checked here for a message that names the actual numbers; the WHERE
         # clause below is what actually enforces it under concurrency.
@@ -467,6 +479,65 @@ class PartStore:
         """
         return self.record_movement(part_id, delta, MovementReason.CORRECTION, now=now)
 
+    # --- retiring and deleting ---------------------------------------------
+
+    def retire_part(self, part_id: int, *, now: str | None = None) -> Part:
+        """Soft-delete: hide a part you no longer stock, keep its history.
+
+        Sets ``retired_at``; the part drops out of the catalogue, search and the
+        "to order" list, and refuses further movements. **Every ledger row
+        stays**, so "what did 26-0001 cost" is still answerable. Idempotent —
+        retiring twice keeps the original timestamp.
+        """
+        part = self._require(part_id)
+        if part.retired:
+            return part
+        with self._conn:
+            self._conn.execute(
+                "UPDATE parts SET retired_at = ?, updated_at = ? WHERE id = ?",
+                (now or _now(), now or _now(), part_id),
+            )
+        return self._require(part_id)
+
+    def unretire_part(self, part_id: int, *, now: str | None = None) -> Part:
+        """Bring a retired part back into stock."""
+        self._require(part_id)
+        with self._conn:
+            self._conn.execute(
+                "UPDATE parts SET retired_at = NULL, updated_at = ? WHERE id = ?",
+                (now or _now(), part_id),
+            )
+        return self._require(part_id)
+
+    def delete_part(self, part_id: int) -> None:
+        """Hard-delete a mis-add — **only** if nothing has been used from it.
+
+        The part's own setup rows (``initial``, restock, correction) are its
+        business and cascade away with it. A ``consume`` row is different: it's
+        job-costing history someone else may depend on, so once one exists this
+        refuses and points at :meth:`retire_part` instead. Retiring doesn't
+        launder that — a retired part with consumption still can't be deleted.
+        """
+        self._require(part_id)
+        consumed = self._conn.execute(
+            "SELECT COUNT(*) FROM movements WHERE part_id = ? AND reason = ?",
+            (part_id, MovementReason.CONSUME.value),
+        ).fetchone()[0]
+        if consumed:
+            raise ValueError(
+                f"part {part_id} has {consumed} consumption movement(s) — that's job history; "
+                "retire it instead of deleting"
+            )
+        with self._conn:
+            # FK ON DELETE CASCADE removes the setup movements.
+            self._conn.execute("DELETE FROM parts WHERE id = ?", (part_id,))
+
+    def _require(self, part_id: int) -> Part:
+        part = self.get_part(part_id)
+        if part is None:
+            raise LookupError(f"no part with id {part_id}")
+        return part
+
     # --- updating -----------------------------------------------------------
 
     def update_part(
@@ -558,6 +629,7 @@ def _to_part(row: sqlite3.Row) -> Part:
         notes=row["notes"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        retired_at=row["retired_at"],
     )
 
 

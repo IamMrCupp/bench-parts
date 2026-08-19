@@ -177,6 +177,16 @@
       }
       .muted { color: var(--muted); }
 
+      /* Retire / delete. Retired rows are dimmed, not hidden, when shown. */
+      .notice { padding: 0.75rem 1rem; border-radius: 6px; border-left: 5px solid var(--muted); background: #f1f2f4; }
+      .notice form.inline { display: inline-block; margin: 0.5rem 0 0; }
+      tr.retired { opacity: 0.55; }
+      .badge.retired-badge { background: var(--muted); font-size: 0.75rem; }
+      .danger { display: grid; gap: 0.5rem; max-width: 26rem; }
+      .danger form { margin: 0; }
+      button.secondary { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 600; }
+      button.destructive { background: var(--out); border-color: var(--out); }
+
       /* Stock controls: three one-line forms. On a tablet each is tap the
          field, type a number, tap the button. */
       .stock-controls { display: grid; gap: 0.75rem; margin: 0 0 1.5rem; }
@@ -235,6 +245,8 @@
           --ok: #5fce86; --low: #e0a44a; --out: #f08a8a;
         }
         input, textarea, select, fieldset, table, nav a, .stock-control { background: #1e2126; }
+        .notice { background: #23272d; }
+        button.secondary { color: var(--ink); }
         nav a[aria-current="page"] { background: var(--accent); color: #10131a; }
         button { color: #10131a; }
         .error { background: #2a1c1e; }

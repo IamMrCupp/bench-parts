@@ -23,7 +23,7 @@ definition, and so ``status`` is derived exactly as the UI derives it.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, StrictInt
 
 from bench_parts.store import Movement, Part, PartStore
@@ -59,6 +59,7 @@ PART_KEYS = (
     "notes",
     "created_at",
     "updated_at",
+    "retired_at",
     "url",
 )
 
@@ -98,6 +99,8 @@ def to_api_part(part: Part, base_url: str) -> dict[str, object]:
         "notes": part.notes,
         "created_at": part.created_at,
         "updated_at": part.updated_at,
+        # null = live. Retired parts are hidden from listings unless asked for.
+        "retired_at": part.retired_at,
         # A deep link into the web UI, behind its own login. Handy from a HUD.
         "url": f"{base_url.rstrip('/')}/parts/{part.id}",
     }
@@ -138,6 +141,7 @@ def build_router(get_store) -> APIRouter:
         below_min: bool = False,
         q: str = "",
         category: str = "",
+        include_retired: bool = False,
     ) -> list[dict[str, object]]:
         """The catalogue, or with ``?below_min=1`` the "to order" set.
 
@@ -150,7 +154,9 @@ def build_router(get_store) -> APIRouter:
             parts = (
                 store.list_below_min()
                 if below_min
-                else store.search(q=q or None, category=category or None)
+                else store.search(
+                    q=q or None, category=category or None, include_retired=include_retired
+                )
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
@@ -216,5 +222,27 @@ def build_router(get_store) -> APIRouter:
             "part": to_api_part(updated, str(request.base_url)),
             "movement": to_api_movement(movement),
         }
+
+    @router.delete("/parts/{part_id}", status_code=204)
+    def delete_part(part_id: int, store: StoreDep) -> Response:
+        """Hard-delete a mis-add. **409** once anything has been consumed —
+        that's job history; retire it instead."""
+        _require_part(store, part_id)
+        try:
+            store.delete_part(part_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+        return Response(status_code=204)
+
+    @router.post("/parts/{part_id}/retire")
+    def retire_part(request: Request, part_id: int, store: StoreDep) -> dict[str, object]:
+        """Soft-delete: hidden from listings and the order set, ledger kept."""
+        _require_part(store, part_id)
+        return to_api_part(store.retire_part(part_id), str(request.base_url))
+
+    @router.post("/parts/{part_id}/unretire")
+    def unretire_part(request: Request, part_id: int, store: StoreDep) -> dict[str, object]:
+        _require_part(store, part_id)
+        return to_api_part(store.unretire_part(part_id), str(request.base_url))
 
     return router

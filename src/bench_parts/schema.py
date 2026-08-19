@@ -25,7 +25,7 @@ import sqlite3
 
 from bench_parts.vocabulary import Category, MovementReason, sql_in_list
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 _CREATE_PARTS = f"""
@@ -63,6 +63,11 @@ CREATE TABLE IF NOT EXISTS parts (
 
     created_at       TEXT    NOT NULL,
     updated_at       TEXT    NOT NULL,
+
+    -- v3: soft-delete. NULL = live. A retired part is hidden from the catalogue
+    -- and the "to order" list but keeps every movement, so job costing stays
+    -- answerable. Hard delete is only allowed with no consumption history.
+    retired_at       TEXT,
 
     CONSTRAINT known_category CHECK (category IN ({sql_in_list(Category)})),
 
@@ -140,6 +145,24 @@ def _upgrade_to_v2(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_PARTS_CATEGORY_INDEX)
 
 
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    """``ALTER TABLE ADD COLUMN``, but a no-op when the column already exists.
+
+    A database that arrives here via the v2 *rebuild* already has the column
+    (``_CREATE_PARTS`` is the current schema); one that was genuinely at v2
+    doesn't. Checking ``table_info`` rather than catching the duplicate-column
+    error keeps the migration honest either way.
+    """
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
+def _upgrade_to_v3(conn: sqlite3.Connection) -> None:
+    """v2 → v3: add ``retired_at``. A plain add-column — no rebuild needed."""
+    _add_column_if_missing(conn, "parts", "retired_at", "TEXT")
+
+
 def _migrate(conn: sqlite3.Connection, step, version: int) -> None:
     """Run one table-rebuild migration step atomically and FK-safely.
 
@@ -204,3 +227,5 @@ def initialise(conn: sqlite3.Connection) -> None:
     # atomic on its own. A failure part-way leaves it at the last good version.
     if current < 2:
         _migrate(conn, _upgrade_to_v2, 2)
+    if current < 3:
+        _migrate(conn, _upgrade_to_v3, 3)

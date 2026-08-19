@@ -10,6 +10,17 @@
     <span class="badge status-{{ part.status.value }}">{{ part.status.label }}</span>
   </p>
 
+  {% if part.retired %}
+    <p class="notice retired-notice">
+      <strong>Retired</strong> {{ part.retired_at[:10] }} — hidden from the catalogue and the
+      order list. History is kept. Not stocked any more; unretire to bring it back.
+      <form method="post" action="/parts/{{ part.id }}/unretire" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="secondary">Unretire</button>
+      </form>
+    </p>
+  {% endif %}
+
   <dl>
     <dt>Description</dt><dd>{{ part.description }}</dd>
     <dt>Category</dt><dd>{{ part.category.label }}</dd>
@@ -27,10 +38,11 @@
     {% if part.notes %}<dt>Notes</dt><dd class="address">{{ part.notes }}</dd>{% endif %}
   </dl>
 
-  <h2>Adjust stock</h2>
   {% if error %}
     <p class="error" role="alert">{{ error }}</p>
   {% endif %}
+  {% if not part.retired %}
+  <h2>Adjust stock</h2>
   {# Three small forms rather than one with a mode switch: each is a single
      tap-type-tap on a tablet, and each names exactly what it does. All three
      write a ledger row — this is the only way the UI moves a count. #}
@@ -61,6 +73,7 @@
       <button type="submit">Correct</button>
     </form>
   </div>
+  {% endif %}
 
   <h2>History</h2>
   {% if movements %}
@@ -88,6 +101,29 @@
     {% include "_part_fields.html" %}
     <button type="submit">Save changes</button>
   </form>
+
+  {% if not part.retired or deletable %}
+  <h2>Remove</h2>
+  <div class="danger">
+    {% if not part.retired %}
+      <form method="post" action="/parts/{{ part.id }}/retire"
+            onsubmit="return confirm('Retire this part? It disappears from the catalogue and the order list, but every movement is kept. You can unretire it later.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="secondary">Retire — no longer stocked</button>
+      </form>
+    {% endif %}
+    {% if deletable %}
+      {# Only offered while nothing has been used from it. Once there's a
+         consumption row, this button is gone rather than present-and-refusing. #}
+      <form method="post" action="/parts/{{ part.id }}/delete"
+            onsubmit="return confirm('Delete this part for good? Only possible because nothing has been used from it. This cannot be undone.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="destructive">Delete — it was a mistake</button>
+      </form>
+      <p class="hint">Delete is for mis-adds. Once a part has been used on a job, only Retire is offered — the history has to stay.</p>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <p class="timestamps">Added {{ part.created_at[:10] }} · updated {{ part.updated_at[:10] }}</p>
 {% endblock %}

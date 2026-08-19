@@ -18,6 +18,12 @@
     <button type="submit">Search</button>
   </form>
 
+  {% if retired_count %}
+    <p class="muted"><a href="/?show_retired=1{% if q %}&q={{ q }}{% endif %}{% if category %}&category={{ category }}{% endif %}">Show {{ retired_count }} retired part{{ "s" if retired_count != 1 else "" }}</a></p>
+  {% elif show_retired %}
+    <p class="muted">Showing retired parts too. <a href="/">Hide them</a>.</p>
+  {% endif %}
+
   {% if parts %}
     <table class="parts">
       <thead>
@@ -33,7 +39,7 @@
         {% for part in parts %}
           {# The status class comes from Part.status — one definition, shared with
              the "to order" page. Never re-derive it here. #}
-          <tr class="status-{{ part.status.value }}">
+          <tr class="status-{{ part.status.value }}{% if part.retired %} retired{% endif %}">
             <td class="mpn">
               {% if part.mpn %}
                 <a href="/parts/{{ part.id }}">{{ part.mpn }}</a>
@@ -41,7 +47,7 @@
                 <a href="/parts/{{ part.id }}" class="muted">no MPN</a>
               {% endif %}
             </td>
-            <td class="desc">{{ part.description }}</td>
+            <td class="desc">{{ part.description }}{% if part.retired %} <span class="badge retired-badge">retired</span>{% endif %}</td>
             <td class="cat">{{ part.category.label }}</td>
             <td class="loc">{{ part.location or "" }}</td>
             <td class="stock">

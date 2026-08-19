@@ -317,6 +317,7 @@ def catalogue(
     store: StoreDep,
     q: str = "",
     category: str = "",
+    show_retired: str = "",
 ) -> HTMLResponse:
     """The catalogue — the primary screen.
 
@@ -325,15 +326,32 @@ def catalogue(
     category is a 400: a typo'd filter that silently shows an empty shelf is
     worse than an error.
     """
+    include_retired = show_retired not in ("", "0")
     try:
-        parts = store.search(q=q or None, category=category or None)
+        parts = store.search(
+            q=q or None, category=category or None, include_retired=include_retired
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    # Offer the "show retired" link only when there's something to show — an
+    # empty toggle is noise on a screen you glance at.
+    retired_count = (
+        0
+        if include_retired
+        else sum(1 for p in store.list_parts(include_retired=True) if p.retired)
+    )
 
     return templates.TemplateResponse(
         request=request,
         name="catalogue.html",
-        context={"parts": parts, "q": q, "category": category},
+        context={
+            "parts": parts,
+            "q": q,
+            "category": category,
+            "show_retired": include_retired,
+            "retired_count": retired_count,
+        },
     )
 
 
@@ -475,12 +493,16 @@ def _render_detail(
     """The detail page. On a rejected edit, ``values`` carries the attempt so
     nothing typed is lost — and the part's own info and history still render,
     rather than the page collapsing to a bare form."""
+    movements = store.list_movements(part.id)
     return templates.TemplateResponse(
         request=request,
         name="part_detail.html",
         context={
             "part": part,
-            "movements": store.list_movements(part.id),
+            "movements": movements,
+            # Delete is only *possible* with no consumption history; don't
+            # offer a button that will only ever say no.
+            "deletable": not any(m.reason.value == "consume" for m in movements),
             "values": values or _edit_values(part),
             "error": error,
         },
@@ -615,3 +637,28 @@ def order_list(request: Request, store: StoreDep) -> HTMLResponse:
         name="order.html",
         context={"parts": store.list_below_min()},
     )
+
+
+@app.post("/parts/{part_id}/retire")
+def retire_part(part_id: int, store: StoreDep) -> Response:
+    """Soft-delete: hide a part you no longer stock, keep its history."""
+    store.retire_part(_require_part(store, part_id).id)
+    return RedirectResponse(url=f"/parts/{part_id}", status_code=303)
+
+
+@app.post("/parts/{part_id}/unretire")
+def unretire_part(part_id: int, store: StoreDep) -> Response:
+    store.unretire_part(_require_part(store, part_id).id)
+    return RedirectResponse(url=f"/parts/{part_id}", status_code=303)
+
+
+@app.post("/parts/{part_id}/delete")
+def delete_part(request: Request, part_id: int, store: StoreDep) -> Response:
+    """Hard-delete a mis-add. Refused (400, page intact) once anything has been
+    consumed — that's job history; retire instead."""
+    part = _require_part(store, part_id)
+    try:
+        store.delete_part(part.id)
+    except ValueError as exc:
+        return _render_detail(request, store, part, error=str(exc), status_code=400)
+    return RedirectResponse(url="/", status_code=303)
