@@ -80,6 +80,15 @@ class Movement:
     created_at: str
 
 
+@dataclass(frozen=True)
+class Activity:
+    """A movement together with the part it belongs to — what the activity page
+    and any "what happened" view need in one row."""
+
+    movement: Movement
+    part: Part
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -339,6 +348,47 @@ class PartStore:
             "SELECT * FROM movements WHERE part_id = ? ORDER BY id", (part_id,)
         ).fetchall()
         return [_to_movement(row) for row in rows]
+
+    def list_recent_movements(
+        self, *, limit: int = 50, ticket_ref: object = None
+    ) -> list[Activity]:
+        """The ledger across all parts, newest first, each with its part.
+
+        Includes retired parts — retiring hides a part from the catalogue, not
+        from what happened. ``ticket_ref`` narrows to one job.
+        """
+        ref = _clean(ticket_ref)
+        where = "WHERE m.ticket_ref = ?" if ref else ""
+        params: tuple = (ref, int(limit)) if ref else (int(limit),)
+        rows = self._conn.execute(
+            "SELECT m.id AS m_id, m.part_id, m.delta, m.reason, m.ticket_ref,"
+            " m.unit_cost_at_time, m.created_at AS m_created, p.*"
+            " FROM movements m JOIN parts p ON p.id = m.part_id"
+            f" {where} ORDER BY m.id DESC LIMIT ?",
+            params,
+        ).fetchall()
+        out = []
+        for r in rows:
+            movement = Movement(
+                id=r["m_id"],
+                part_id=r["part_id"],
+                delta=r["delta"],
+                reason=to_reason(r["reason"]),
+                ticket_ref=r["ticket_ref"],
+                unit_cost_at_time=r["unit_cost_at_time"],
+                created_at=r["m_created"],
+            )
+            out.append(Activity(movement=movement, part=_to_part(r)))
+        return out
+
+    def ticket_spend_cents(self, ticket_ref: str) -> int:
+        """Parts cost booked to one job: sum of -delta times cost-at-the-time over
+        its consumption rows. Zero for an unknown ref."""
+        return sum(
+            -m.delta * (m.unit_cost_at_time or 0)
+            for m in self.list_movements_by_ticket(ticket_ref)
+            if m.reason is MovementReason.CONSUME
+        )
 
     def list_movements_by_ticket(self, ticket_ref: str) -> list[Movement]:
         """Everything recorded against one job ref, oldest first.
