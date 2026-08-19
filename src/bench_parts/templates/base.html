@@ -159,6 +159,9 @@
       .badge.retired-badge { background: var(--surface-2); color: var(--muted); }
       .chip { display: inline-block; padding: 0.02rem var(--sp-2); border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: var(--fs-0); white-space: nowrap; vertical-align: middle; background: var(--surface); }
       tr.retired { opacity: 0.55; }
+      table.activity td.when { white-space: nowrap; font-size: var(--fs-1); }
+      table.activity tr.reason-consume td.stock .count { color: var(--out); }
+      table.activity tr.reason-restock td.stock .count, table.activity tr.reason-initial td.stock .count { color: var(--ok); }
       .muted { color: var(--muted); }
       .empty { color: var(--muted); text-align: center; padding: var(--sp-6) var(--sp-4); background: var(--surface); border: 1px dashed var(--line-2); border-radius: var(--radius); }
       .timestamps { color: var(--muted); font-size: var(--fs-0); margin-top: var(--sp-6); }
@@ -260,6 +263,7 @@
           <nav class="tabs" aria-label="Main">
             <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Catalogue</a>
             <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order{% if low_count %} <span class="count-badge">{{ low_count }}</span>{% endif %}</a>
+            <a href="/activity" {% if request.url.path == "/activity" %}aria-current="page"{% endif %}>Activity</a>
             <a href="/parts/new" {% if request.url.path == "/parts/new" %}aria-current="page"{% endif %}>Add part</a>
           </nav>
         {% endif %}
