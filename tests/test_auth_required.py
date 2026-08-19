@@ -107,12 +107,16 @@ def test_every_route_is_protected_or_explicitly_exempt() -> None:
     anyone remembering — and if one is deliberately exempted, that shows up
     here as a change to `EXEMPT_PATHS` rather than passing silently.
     """
+    from bench_parts.app import EXEMPT_PREFIXES
+
     documented = set(EXEMPT_PATHS)
     app_paths = {
         route.path
         for route in app.routes
         if getattr(route, "path", "").startswith("/")
         and route.path not in ("/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc")
+        # The static mount is exempt by prefix and serves files, not data.
+        and not (route.path + "/").startswith(EXEMPT_PREFIXES)
     }
 
     unexpected_exempt = documented - app_paths
@@ -135,5 +139,10 @@ def test_every_route_is_protected_or_explicitly_exempt() -> None:
 
 
 def test_exempt_set_is_minimal() -> None:
-    """Each exemption is a hole; there should be very few and each obvious."""
-    assert frozenset({"/healthz", "/login"}) == EXEMPT_PATHS
+    """Each exemption is a hole; there should be very few and each obvious.
+
+    /manifest.webmanifest joined in Phase 6: the browser fetches it signed-out
+    to install the app, and it contains nothing but icon paths and a colour.
+    Static files are exempt by prefix (EXEMPT_PREFIXES) for the same reason.
+    """
+    assert frozenset({"/healthz", "/login", "/manifest.webmanifest"}) == EXEMPT_PATHS

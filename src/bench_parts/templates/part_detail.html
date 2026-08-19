@@ -108,7 +108,7 @@
   <div class="danger">
     {% if not part.retired %}
       <form method="post" action="/parts/{{ part.id }}/retire"
-            onsubmit="return confirm('Retire this part? It disappears from the catalogue and the order list, but every movement is kept. You can unretire it later.');">
+            data-confirm="Retire this part? It disappears from the catalogue and the order list, but every movement is kept. You can unretire it later.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <button type="submit" class="secondary">Retire — no longer stocked</button>
       </form>
@@ -117,7 +117,7 @@
       {# Only offered while nothing has been used from it. Once there's a
          consumption row, this button is gone rather than present-and-refusing. #}
       <form method="post" action="/parts/{{ part.id }}/delete"
-            onsubmit="return confirm('Delete this part for good? Only possible because nothing has been used from it. This cannot be undone.');">
+            data-confirm="Delete this part for good? Only possible because nothing has been used from it. This cannot be undone.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <button type="submit" class="destructive">Delete — it was a mistake</button>
       </form>

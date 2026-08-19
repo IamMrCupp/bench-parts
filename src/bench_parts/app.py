@@ -22,6 +22,7 @@ from fastapi.responses import (
     RedirectResponse,
     Response,
 )
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
@@ -57,7 +58,13 @@ app = FastAPI(
 #: exist; `/login` obviously cannot require being logged in. Nothing else
 #: belongs here, and `tests/test_auth_required.py` enumerates the routing table
 #: to keep that honest.
-EXEMPT_PATHS = frozenset({"/healthz", "/login"})
+EXEMPT_PATHS = frozenset({"/healthz", "/login", "/manifest.webmanifest"})
+
+#: Path *prefixes* reachable without a session. Icons, the manifest and the
+#: one script are fetched by the browser before anyone has signed in — a
+#: redirect to /login there means no icon and a broken "Add to Home Screen".
+#: Static files only; nothing under here reads the database.
+EXEMPT_PREFIXES = ("/static/",)
 
 #: Methods that change state and therefore need a CSRF token.
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -108,7 +115,8 @@ async def require_session(request: Request, call_next):
     # Auth first for browser routes. A request with no session has nothing worth
     # forging against, and "go and sign in" is a more useful answer than
     # "unverifiable".
-    if path not in EXEMPT_PATHS and not request.session.get("authenticated"):
+    exempt = path in EXEMPT_PATHS or path.startswith(EXEMPT_PREFIXES)
+    if not exempt and not request.session.get("authenticated"):
         target = quote(path, safe="/")
         return RedirectResponse(url=f"/login?next={target}", status_code=303)
 
@@ -131,6 +139,31 @@ async def require_session(request: Request, call_next):
     return await call_next(request)
 
 
+#: Response headers on every response. Inline CSS is the whole styling story
+#: (no build step, no external stylesheet to forget to deploy), so styles get
+#: 'unsafe-inline' deliberately; scripts do NOT — the one script lives at
+#: /static/app.js, which is what lets an injected <script> in a description be
+#: inert. frame-ancestors 'none' + X-Frame-Options DENY: nothing embeds this.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+    ),
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 # Added last, so it wraps the auth middleware — the session has to be decoded
 # before anything can check it. `secret_key` is resolved at import: a
 # deployment without a password hash fails here, visibly, rather than starting.
@@ -138,6 +171,9 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=auth.session_secret(),
     session_cookie="session",
+    # 30 days: a shop tablet, not a bank. Starlette's default is 14; explicit
+    # so it's a decision rather than an inheritance.
+    max_age=30 * 24 * 60 * 60,
     https_only=auth.cookie_secure(),
     same_site="lax",
 )
@@ -192,6 +228,21 @@ def _page_context(request: Request) -> dict[str, object]:
 
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR, context_processors=[_page_context])
+
+# Icons, the manifest and the one script. Resolved relative to this module,
+# like the templates, and shipped inside the wheel (see pyproject). Mounted
+# under /static; the manifest is also served at the root because some browsers
+# want it there and it's referenced from every page.
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifest() -> Response:
+    return Response(
+        (STATIC_DIR / "manifest.webmanifest").read_bytes(),
+        media_type="application/manifest+json",
+    )
 
 
 # --- error pages -------------------------------------------------------------

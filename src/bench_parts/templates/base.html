@@ -7,6 +7,15 @@
        touch target ends up too small to hit. #}
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}bench-parts{% endblock %}</title>
+    {# Installable on the tablet: icon, manifest, theme colour, and the Apple
+       meta pair that makes "Add to Home Screen" open standalone. #}
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/static/icon-180.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1c4f8f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Parts" />
 
     {# Inline, no build step, no framework — see plan.md non-goals. The numbers
        here are the load-bearing part; see the comments against each. #}
@@ -314,5 +323,6 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
+    <script src="/static/app.js" defer></script>
   </body>
 </html>

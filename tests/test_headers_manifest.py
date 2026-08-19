@@ -3,10 +3,8 @@
 import re
 
 import pytest
-from fastapi.testclient import TestClient
 
-from bench_parts.app import EXEMPT_PATHS, EXEMPT_PREFIXES, app
-
+from bench_parts.app import EXEMPT_PATHS, EXEMPT_PREFIXES
 
 # --- headers ----------------------------------------------------------------
 
