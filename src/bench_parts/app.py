@@ -14,14 +14,16 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
-    PlainTextResponse,
     RedirectResponse,
     Response,
 )
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from bench_parts import api, auth
@@ -124,10 +126,7 @@ async def require_session(request: Request, call_next):
 
         form = await request.form()
         if not auth.csrf_valid(request.session, form.get("csrf_token")):
-            return PlainTextResponse(
-                "Request could not be verified. Reload the page and try again.",
-                status_code=403,
-            )
+            return _error_page(request, 403, "Request could not be verified.")
 
     return await call_next(request)
 
@@ -148,8 +147,20 @@ app.add_middleware(
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
-def _csrf_context(request: Request) -> dict[str, object]:
-    """Make ``csrf_token`` available to every template.
+def flash(request: Request, message: str) -> None:
+    """Queue a one-shot message for the *next* rendered page.
+
+    Every mutation here is POST → redirect → GET, so the confirmation has to
+    survive one hop. It rides in the signed session and is consumed on render
+    (see ``_page_context``), so a refresh doesn't repeat it and it can't be
+    replayed by a bookmark.
+    """
+    request.session["flash"] = message
+
+
+def _page_context(request: Request) -> dict[str, object]:
+    """Per-render context every template gets: CSRF token, auth state, the
+    pending flash (consumed here), and the low-stock count for the nav.
 
     A context processor rather than a per-route context entry, for the same
     deny-by-default reason as the auth middleware: a template added later gets
@@ -157,16 +168,82 @@ def _csrf_context(request: Request) -> dict[str, object]:
     hidden field fails visibly at the first POST instead of silently dropping
     protection.
     """
+    authenticated = bool(request.session.get("authenticated"))
+    # Cheap at bench scale (hundreds of parts), and it's the number you glance
+    # at without clicking. Only computed for a signed-in page — the login page
+    # must not leak how much is low.
+    low_count = 0
+    if authenticated:
+        try:
+            with connect(get_db_path()) as conn:
+                initialise(conn)
+                low_count = len(PartStore(conn).list_below_min())
+        except Exception:  # the nav must never take a page down
+            low_count = 0
     return {
         "csrf_token": auth.csrf_token(request.session),
         # Distinct from the token: a token exists *before* sign-in, because the
         # login form itself needs one. Keying UI on the token would show a
         # "Sign out" button to someone who has never signed in.
-        "authenticated": bool(request.session.get("authenticated")),
+        "authenticated": authenticated,
+        "flash": request.session.pop("flash", None),
+        "low_count": low_count,
     }
 
 
-templates = Jinja2Templates(directory=TEMPLATES_DIR, context_processors=[_csrf_context])
+templates = Jinja2Templates(directory=TEMPLATES_DIR, context_processors=[_page_context])
+
+
+# --- error pages -------------------------------------------------------------
+#
+# FastAPI answers every HTTPException with JSON. That's right for /api/* and
+# wrong for a person on a tablet, who should never see {"detail": ...}. These
+# handlers keep JSON for the API and render error.html — in the app's own
+# chrome, with a way back — for everything else.
+
+_ERROR_TITLES = {
+    400: "That didn't work",
+    403: "Couldn't verify that request",
+    404: "Not found",
+    500: "Something broke",
+}
+
+
+def _wants_json(request: Request) -> bool:
+    return request.url.path.startswith("/api/")
+
+
+def _error_page(request: Request, status: int, detail: str) -> HTMLResponse:
+    hint = {
+        403: "Your session may have expired. Reload the page and try again.",
+        404: "That part or page doesn't exist — it may have been deleted.",
+        500: "It's been logged. Try again; if it keeps happening, restart the app.",
+    }.get(status, "")
+    return templates.TemplateResponse(
+        request=request,
+        name="error.html",
+        context={
+            "status": status,
+            "title": _ERROR_TITLES.get(status, "Error"),
+            "detail": detail,
+            "hint": hint,
+        },
+        status_code=status,
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error(request: Request, exc: StarletteHTTPException):
+    if _wants_json(request):
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    return _error_page(request, exc.status_code, str(exc.detail))
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request: Request, exc: RequestValidationError):
+    if _wants_json(request):
+        return JSONResponse({"detail": jsonable_encoder(exc.errors())}, status_code=422)
+    return _error_page(request, 400, "The form couldn't be read. Go back and try again.")
 
 
 def _dollars(cents: int | None) -> str:
@@ -308,6 +385,7 @@ def login(
 def logout(request: Request) -> Response:
     """End the session."""
     request.session.clear()
+    flash(request, "Signed out")
     return RedirectResponse(url="/login", status_code=303)
 
 
@@ -469,6 +547,7 @@ def create_part(
     except ValueError as exc:
         return _render_part_form(request, store, values=submitted, error=str(exc), status_code=400)
 
+    flash(request, f"Added {part.description}")
     return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
 
 
@@ -590,6 +669,7 @@ def edit_part(
             request, store, part, values=submitted, error=str(exc), status_code=400
         )
 
+    flash(request, "Saved")
     return RedirectResponse(url=f"/parts/{part.id}", status_code=303)
 
 
@@ -621,18 +701,22 @@ def record_movement(
     nothing written, rather than a 500.
     """
     part = _require_part(store, part_id)
+    name = part.mpn or part.description
 
     try:
         if action == "restock":
-            store.restock(part.id, parse_count(amount, "amount", allow_zero=False))
+            n = parse_count(amount, "amount", allow_zero=False)
+            updated = store.restock(part.id, n)
+            flash(request, f"Restocked {n} {name} — now {updated.quantity_on_hand} on hand")
         elif action == "consume":
-            store.consume(
-                part.id,
-                parse_count(amount, "amount", allow_zero=False),
-                ticket_ref=ticket_ref,
-            )
+            n = parse_count(amount, "amount", allow_zero=False)
+            updated = store.consume(part.id, n, ticket_ref=ticket_ref)
+            job = f" on {ticket_ref.strip()}" if ticket_ref.strip() else ""
+            flash(request, f"Used {n} {name}{job} — {updated.quantity_on_hand} left")
         elif action == "correct":
-            store.correct(part.id, parse_signed_count(amount, "correction"))
+            n = parse_signed_count(amount, "correction")
+            updated = store.correct(part.id, n)
+            flash(request, f"Corrected {name} by {n:+d} — now {updated.quantity_on_hand} on hand")
         else:
             raise ValueError(f"unknown action {action!r} — expected restock, consume or correct")
     except ValueError as exc:
@@ -657,15 +741,19 @@ def order_list(request: Request, store: StoreDep) -> HTMLResponse:
 
 
 @app.post("/parts/{part_id}/retire")
-def retire_part(part_id: int, store: StoreDep) -> Response:
+def retire_part(request: Request, part_id: int, store: StoreDep) -> Response:
     """Soft-delete: hide a part you no longer stock, keep its history."""
-    store.retire_part(_require_part(store, part_id).id)
+    part = _require_part(store, part_id)
+    store.retire_part(part.id)
+    flash(request, f"Retired {part.mpn or part.description} — history kept")
     return RedirectResponse(url=f"/parts/{part_id}", status_code=303)
 
 
 @app.post("/parts/{part_id}/unretire")
-def unretire_part(part_id: int, store: StoreDep) -> Response:
-    store.unretire_part(_require_part(store, part_id).id)
+def unretire_part(request: Request, part_id: int, store: StoreDep) -> Response:
+    part = _require_part(store, part_id)
+    store.unretire_part(part.id)
+    flash(request, f"{part.mpn or part.description} is back in stock")
     return RedirectResponse(url=f"/parts/{part_id}", status_code=303)
 
 
@@ -678,4 +766,5 @@ def delete_part(request: Request, part_id: int, store: StoreDep) -> Response:
         store.delete_part(part.id)
     except ValueError as exc:
         return _render_detail(request, store, part, error=str(exc), status_code=400)
+    flash(request, f"Deleted {part.mpn or part.description}")
     return RedirectResponse(url="/", status_code=303)

@@ -177,6 +177,34 @@
       }
       .muted { color: var(--muted); }
 
+      /* One-shot confirmation after an action. Quiet, not a modal. */
+      .flash {
+        border-left: 5px solid var(--ok);
+        background: #eef7f0;
+        padding: 0.6rem 1rem;
+        border-radius: 6px;
+        margin: 0 0 1rem;
+        font-weight: 600;
+      }
+      /* Low-stock count in the nav — the number you glance at. */
+      .count-badge {
+        display: inline-block;
+        min-width: 1.4em;
+        padding: 0 0.4em;
+        border-radius: 999px;
+        background: var(--low);
+        color: #fff;
+        font-size: 0.85rem;
+        text-align: center;
+        line-height: 1.5;
+        vertical-align: 0.1em;
+      }
+      nav a[aria-current="page"] .count-badge { background: #fff; color: var(--accent); }
+      .error-page { text-align: center; padding: 2rem 0; }
+      .error-code { font-size: 4rem; font-weight: 800; margin: 0; color: var(--muted); }
+      .error-detail { font-size: 1.25rem; margin: 0.5rem 0; }
+      .error-page .actions a { display: inline-block; min-height: var(--touch); line-height: var(--touch); }
+
       /* Retire / delete. Retired rows are dimmed, not hidden, when shown. */
       .notice { padding: 0.75rem 1rem; border-radius: 6px; border-left: 5px solid var(--muted); background: #f1f2f4; }
       .notice form.inline { display: inline-block; margin: 0.5rem 0 0; }
@@ -257,6 +285,7 @@
         }
         input, textarea, select, fieldset, table, nav a, .stock-control { background: #1e2126; }
         .notice { background: #23272d; }
+        .flash { background: #1c2a20; }
         button.secondary { color: var(--ink); }
         nav a[aria-current="page"] { background: var(--accent); color: #10131a; }
         button { color: #10131a; }
@@ -270,7 +299,7 @@
       {% if authenticated %}
         <nav>
           <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Catalogue</a>
-          <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order</a>
+          <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order{% if low_count %} <span class="count-badge">{{ low_count }}</span>{% endif %}</a>
           <a href="/parts/new" {% if request.url.path == "/parts/new" %}aria-current="page"{% endif %}>Add part</a>
           <form method="post" action="/logout" class="signout">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
@@ -280,6 +309,9 @@
       {% endif %}
     </header>
     <main>
+      {% if flash %}
+        <p class="flash" role="status">{{ flash }}</p>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
   </body>

@@ -104,39 +104,41 @@ def _flash(body: str) -> str | None:
 
 
 def test_adding_a_part_flashes(client) -> None:
-    client.post("/parts", data={"description": "New thing", "category": "other", "mpn": "NEW"})
-    body = client.get("/").text  # follow the redirect target by hand
+    # TestClient follows the 303, so the response body IS the page after the action.
+    body = client.post(
+        "/parts", data={"description": "New thing", "category": "other", "mpn": "NEW"}
+    ).text
 
     assert _flash(body) and "New thing" in _flash(body)
 
 
 def test_flash_is_shown_once(client) -> None:
     client.post("/parts", data={"description": "New thing", "category": "other", "mpn": "NEW"})
-    client.get("/")
 
     assert _flash(client.get("/").text) is None
 
 
 def test_consume_flashes_with_the_numbers(client, part) -> None:
-    client.post(
+    body = client.post(
         f"/parts/{part.id}/movements",
         data={"action": "consume", "amount": "3", "ticket_ref": "26-0001"},
-    )
-    flash = _flash(client.get(f"/parts/{part.id}").text)
+    ).text
+    flash = _flash(body)
 
     assert flash and "3" in flash and "IRF7910" in flash and "26-0001" in flash
 
 
 def test_restock_and_correct_flash(client, part) -> None:
-    client.post(f"/parts/{part.id}/movements", data={"action": "restock", "amount": "5"})
-    assert "5" in _flash(client.get(f"/parts/{part.id}").text)
-
-    client.post(f"/parts/{part.id}/movements", data={"action": "correct", "amount": "-2"})
-    assert "2" in _flash(client.get(f"/parts/{part.id}").text)
+    assert "5" in _flash(
+        client.post(f"/parts/{part.id}/movements", data={"action": "restock", "amount": "5"}).text
+    )
+    assert "2" in _flash(
+        client.post(f"/parts/{part.id}/movements", data={"action": "correct", "amount": "-2"}).text
+    )
 
 
 def test_edit_flashes(client, part) -> None:
-    client.post(
+    body = client.post(
         f"/parts/{part.id}",
         data={
             "description": "Dual MOSFET",
@@ -144,31 +146,29 @@ def test_edit_flashes(client, part) -> None:
             "mpn": "IRF7910",
             "location": "B2",
         },
-    )
+    ).text
 
-    assert _flash(client.get(f"/parts/{part.id}").text)
+    assert _flash(body)
 
 
 def test_retire_and_delete_flash(client, store, part) -> None:
-    client.post(f"/parts/{part.id}/retire", data={})
-    assert "retired" in _flash(client.get(f"/parts/{part.id}").text).lower()
+    assert "retired" in _flash(client.post(f"/parts/{part.id}/retire", data={}).text).lower()
 
     fresh = store.create_part(description="Oops", category="other", mpn="OOPS")
-    client.post(f"/parts/{fresh.id}/delete", data={})
-    assert "deleted" in _flash(client.get("/").text).lower()
+    assert "deleted" in _flash(client.post(f"/parts/{fresh.id}/delete", data={}).text).lower()
 
 
 def test_rejected_action_does_not_flash_success(client, part) -> None:
-    client.post(f"/parts/{part.id}/movements", data={"action": "consume", "amount": "99"})
+    body = client.post(
+        f"/parts/{part.id}/movements", data={"action": "consume", "amount": "99"}
+    ).text
 
-    assert _flash(client.get(f"/parts/{part.id}").text) is None
+    assert _flash(body) is None
 
 
-def test_login_flashes_nothing_but_logout_does(client) -> None:
-    client.post("/logout", data={})
-    from conftest import TEST_PASSWORD
+def test_logout_flashes_on_the_login_page(client) -> None:
+    page = client.post("/logout", data={}).text  # followed to /login
 
-    page = client.get("/login").text
     assert "signed out" in page.lower()
 
 
@@ -190,14 +190,13 @@ def test_nav_count_hidden_at_zero(client, store) -> None:
 
     body = client.get("/").text
 
-    assert "To order (0)" not in body
-    assert not re.search(r"To order\s*<[^>]*class=\"count-badge\"", body)
+    assert 'class="count-badge"' not in body
 
 
 def test_nav_count_is_live(client, store, part) -> None:
-    assert "count-badge" not in client.get("/").text
+    assert 'class="count-badge"' not in client.get("/").text
     client.post(
         f"/parts/{part.id}/movements", data={"action": "consume", "amount": "7"}
     )  # 10 -> 3, min 4
 
-    assert "count-badge" in client.get("/").text
+    assert 'class="count-badge"' in client.get("/").text
