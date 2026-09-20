@@ -692,7 +692,10 @@ def qr_svg(data: str) -> str:
     """
     import segno
 
-    return segno.make(data, error="m").svg_inline(border=0)
+    # omitsize swaps the fixed width/height attrs for a viewBox — without it
+    # the CSS box scales but the drawing stays at its intrinsic module count,
+    # leaving a tiny code in the corner of the label.
+    return segno.make(data, error="m").svg_inline(border=0, omitsize=True)
 
 
 @app.get("/parts/{part_id}/label", response_class=HTMLResponse)
