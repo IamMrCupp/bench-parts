@@ -40,6 +40,10 @@ from typing import Any
 
 import segno
 
+#: (width, height) px at the printers' 203 dpi — b1: a 50x30 mm label;
+#: d110: a 40x12 mm label on the narrow tape.
+_PRESETS = {"b1": (384, 240), "d110": (320, 96)}
+
 
 class BridgeError(Exception):
     """Anything that should reach the operator as a message, not a traceback."""
@@ -103,9 +107,11 @@ def render_label(part: dict[str, Any], *, width: int, height: int) -> bytes:
     draw = ImageDraw.Draw(image)
 
     # QR on the left at ~70% of label height — at B1 scale that's ~20 mm,
-    # comfortably scannable, and it leaves the text room to be readable.
+    # comfortably scannable, and it leaves the text room to be readable. On
+    # short tape (D110's 12 mm ≈ 96 px) 70% would be unscannably small, so the
+    # QR takes the full height there; ~11 mm is marginal but works up close.
     margin = max(4, height // 24)
-    qr_size = min(height - 2 * margin, int(height * 0.7))
+    qr_size = height - 2 * margin if height <= 128 else min(height - 2 * margin, int(height * 0.7))
     qr = segno.make(part.get("url") or f"part {part['id']}", error="m")
     buf = io.BytesIO()
     scale = max(1, qr_size // (qr.symbol_size(border=0)[0]))
@@ -180,8 +186,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("part_id", type=int)
     parser.add_argument("--base-url", default=os.environ.get("BENCH_PARTS_URL", ""))
     parser.add_argument("--token", default=os.environ.get("BENCH_PARTS_API_TOKEN", ""))
-    parser.add_argument("--width", type=int, default=384, help="label width in px")
-    parser.add_argument("--height", type=int, default=240, help="label height in px")
+    parser.add_argument(
+        "--preset",
+        choices=sorted(_PRESETS),
+        default="b1",
+        help="label size preset for the printer's tape (default: b1)",
+    )
+    parser.add_argument("--width", type=int, help="label width in px (overrides the preset)")
+    parser.add_argument("--height", type=int, help="label height in px (overrides the preset)")
     parser.add_argument("--out", help="write the PNG here instead of printing")
     parser.add_argument(
         "--print-cmd",
@@ -189,6 +201,9 @@ def main(argv: list[str] | None = None) -> int:
         help="printer command; {png} is replaced by the rendered file path",
     )
     args = parser.parse_args(argv)
+    preset_w, preset_h = _PRESETS[args.preset]
+    width = args.width or preset_w
+    height = args.height or preset_h
 
     if not args.base_url or not args.token:
         print("set --base-url/--token or BENCH_PARTS_URL/BENCH_PARTS_API_TOKEN", file=sys.stderr)
@@ -199,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         part = fetch_part(args.base_url, args.token, args.part_id)
-        png = render_label(part, width=args.width, height=args.height)
+        png = render_label(part, width=width, height=height)
     except BridgeError as exc:
         print(str(exc), file=sys.stderr)
         return 1
