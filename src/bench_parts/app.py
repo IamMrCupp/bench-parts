@@ -682,6 +682,36 @@ def _render_detail(
     )
 
 
+def qr_svg(data: str) -> str:
+    """A QR code as an inline SVG string.
+
+    Server-side and dependency-light on purpose: the shop LAN may have no WAN,
+    so a client-side QR library from a CDN is exactly the kind of dependency
+    this app refuses. ``segno`` is pure Python with zero transitive deps.
+    ``svg_inline`` emits a fragment made for embedding straight into HTML.
+    """
+    import segno
+
+    # omitsize swaps the fixed width/height attrs for a viewBox — without it
+    # the CSS box scales but the drawing stays at its intrinsic module count,
+    # leaving a tiny code in the corner of the label.
+    return segno.make(data, error="m").svg_inline(border=0, omitsize=True)
+
+
+@app.get("/parts/{part_id}/label", response_class=HTMLResponse)
+def part_label(request: Request, part_id: int, store: StoreDep) -> HTMLResponse:
+    """A printable drawer label: description, MPN, location, and a QR that
+    opens this part. The QR encodes the URL the request arrived on, so a label
+    printed from the LAN address scans back to the LAN address."""
+    part = _require_part(store, part_id)
+    target = str(request.base_url).rstrip("/") + f"/parts/{part.id}"
+    return templates.TemplateResponse(
+        request,
+        "label.html",
+        {**_page_context(request), "part": part, "qr": qr_svg(target)},
+    )
+
+
 @app.get("/parts/{part_id}", response_class=HTMLResponse)
 def part_detail(request: Request, part_id: int, store: StoreDep) -> HTMLResponse:
     """Everything about one part: the count, the catalogue fields (editable),
