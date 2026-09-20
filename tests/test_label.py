@@ -63,3 +63,10 @@ def test_detail_page_links_to_the_label(client, store) -> None:
     part = _mk(store)
 
     assert f'href="/parts/{part.id}/label"' in client.get(f"/parts/{part.id}").text
+
+
+def test_label_page_has_no_inline_script_handlers(client, store) -> None:
+    """CSP is `script-src 'self'` — an onclick would render but never fire."""
+    part = _mk(store)
+
+    assert "onclick" not in client.get(f"/parts/{part.id}/label").text

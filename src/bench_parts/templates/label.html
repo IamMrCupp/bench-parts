@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Label — {{ part.mpn or part.description }} — bench-parts{% endblock %}
+{% block heading %}Drawer label{% endblock %}
+
+{% block content %}
+  <p class="muted screen-only">Print at 100% scale — the label is sized for a 2&frac14;-inch drawer face.
+    Scanning the code opens this part in bench-parts.</p>
+
+  <div class="label-sheet">
+    <div class="label-card">
+      <div class="label-qr">{{ qr | safe }}</div>
+      <div class="label-text">
+        <div class="label-desc">{{ part.description }}</div>
+        {% if part.mpn %}<div class="label-mpn">{{ part.mpn }}</div>{% endif %}
+        <div class="label-meta">
+          {{ part.category.label }}{% if part.location %} · {{ part.location }}{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="actions screen-only">
+    <button type="button" class="primary" data-print>Print</button>
+    <a class="secondary button" href="/parts/{{ part.id }}">Back to part</a>
+  </p>
+
+  <style>
+    .label-sheet { display: flex; justify-content: flex-start; margin: 1rem 0; }
+    .label-card {
+      display: flex; gap: 0.6rem; align-items: center;
+      width: 5.7cm; padding: 0.35cm; box-sizing: content-box;
+      border: 1px dashed var(--border, #999); border-radius: 4px;
+      background: #fff; color: #000;
+    }
+    .label-qr svg { width: 2.2cm; height: 2.2cm; display: block; }
+    .label-text { min-width: 0; }
+    .label-desc { font-weight: 700; font-size: 0.95rem; line-height: 1.15; }
+    .label-mpn { font-family: ui-monospace, monospace; font-size: 0.85rem; margin-top: 0.15rem; }
+    .label-meta { font-size: 0.7rem; margin-top: 0.2rem; color: #333; }
+    @media print {
+      .topbar, .tabs, nav, .screen-only, footer { display: none !important; }
+      body { background: #fff !important; }
+      main { padding: 0 !important; max-width: none !important; }
+      .label-card { border: none; }
+    }
+  </style>
+{% endblock %}
