@@ -22,6 +22,16 @@ dependencies = [
     "segno>=1.6.6",
 ]
 
+[project.optional-dependencies]
+# The label bridge runs on the bench box, not in the server image — Pillow
+# never enters the container. The NIIMBOT CLI itself (niimprintx etc.) is
+# git-only and installed separately on the bench box; it is invoked as a
+# subprocess, never imported, so it is deliberately NOT a dependency here.
+label = ["pillow>=11"]
+
+[project.scripts]
+bench-parts-label = "bench_parts.label_bridge:main"
+
 [project.urls]
 Homepage = "https://github.com/IamMrCupp/bench-parts"
 Issues = "https://github.com/IamMrCupp/bench-parts/issues"
@@ -31,6 +41,8 @@ dev = [
     "ruff>=0.8",
     "pytest>=8.3",
     "httpx2>=2.7.0",
+    # so the label-bridge tests run everywhere the suite does
+    "pillow>=11",
 ]
 
 [build-system]
