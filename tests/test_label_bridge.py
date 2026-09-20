@@ -151,3 +151,48 @@ def test_main_reads_env_for_base_url_and_token(tmp_path, monkeypatch) -> None:
 
     assert rc == 0
     assert seen == {"base_url": "http://parts:8000", "token": "tok"}
+
+
+def test_d110_preset_renders_narrow_tape_size(tmp_path, monkeypatch) -> None:
+    out = tmp_path / "narrow.png"
+    monkeypatch.setattr(label_bridge, "fetch_part", lambda *a, **k: dict(_PART))
+
+    rc = label_bridge.main(
+        ["7", "--base-url", "u", "--token", "t", "--preset", "d110", "--out", str(out)]
+    )
+
+    assert rc == 0
+    assert Image.open(out).size == (320, 96)
+
+
+def test_explicit_size_overrides_the_preset(tmp_path, monkeypatch) -> None:
+    out = tmp_path / "custom.png"
+    monkeypatch.setattr(label_bridge, "fetch_part", lambda *a, **k: dict(_PART))
+
+    rc = label_bridge.main(
+        [
+            "7",
+            "--base-url",
+            "u",
+            "--token",
+            "t",
+            "--preset",
+            "d110",
+            "--width",
+            "300",
+            "--out",
+            str(out),
+        ]
+    )
+
+    assert rc == 0
+    assert Image.open(out).size == (300, 96)
+
+
+def test_qr_uses_full_height_on_short_labels() -> None:
+    png = label_bridge.render_label(_PART, width=320, height=96)
+
+    grey = Image.open(io.BytesIO(png)).convert("L")
+    # bottom-left corner would be blank at the 70% ratio; full-height QR inks it
+    corner = grey.crop((6, 70, 60, 90))
+    assert corner.getextrema()[0] < 64, "QR did not use the full height on narrow tape"
