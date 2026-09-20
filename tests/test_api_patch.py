@@ -2,19 +2,19 @@
 
 
 def _mk(store, **kw):
-    defaults = dict(
-        description="Dual MOSFET",
-        category="mosfet",
-        mpn="IRF7910",
-        manufacturer="Infineon",
-        quantity_on_hand=10,
-        min_quantity=4,
-        unit_cost=187,
-        supplier="Digi-Key",
-        location="A3",
-        notes="keep",
-        project="bench",
-    )
+    defaults = {
+        "description": "Dual MOSFET",
+        "category": "mosfet",
+        "mpn": "IRF7910",
+        "manufacturer": "Infineon",
+        "quantity_on_hand": 10,
+        "min_quantity": 4,
+        "unit_cost": 187,
+        "supplier": "Digi-Key",
+        "location": "A3",
+        "notes": "keep",
+        "project": "bench",
+    }
     defaults.update(kw)
     return store.create_part(**defaults)
 
