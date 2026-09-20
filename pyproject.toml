@@ -27,7 +27,7 @@ dependencies = [
 # never enters the container. The NIIMBOT CLI itself (niimprintx etc.) is
 # git-only and installed separately on the bench box; it is invoked as a
 # subprocess, never imported, so it is deliberately NOT a dependency here.
-label = ["pillow>=11"]
+label = ["pillow>=10.1"]
 
 [project.scripts]
 bench-parts-label = "bench_parts.label_bridge:main"
@@ -42,7 +42,7 @@ dev = [
     "pytest>=8.3",
     "httpx2>=2.7.0",
     # so the label-bridge tests run everywhere the suite does
-    "pillow>=11",
+    "pillow>=10.1",
 ]
 
 [build-system]
