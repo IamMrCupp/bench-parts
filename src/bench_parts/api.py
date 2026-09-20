@@ -24,7 +24,7 @@ definition, and so ``status`` is derived exactly as the UI derives it.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, StrictInt
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 
 from bench_parts.store import Movement, Part, PartStore
 
@@ -39,6 +39,40 @@ class ConsumeRequest(BaseModel):
 
     quantity: StrictInt
     ticket_ref: str | None = None
+
+
+class PatchPartRequest(BaseModel):
+    """Body for ``PATCH /api/parts/{id}`` — explicit partial semantics.
+
+    Only keys *present* in the JSON change; an explicit ``null`` clears a
+    field. This is deliberately not the web form's contract (``POST
+    /parts/{id}`` clears whatever is omitted — correct for a browser form,
+    where every field posts, and exactly wrong for an API client sending one
+    field). ``extra="forbid"`` turns a typo'd key into a 422 instead of a
+    silent no-op, and strict types reject coercion at the edge, same as
+    :class:`ConsumeRequest`.
+
+    ``quantity_on_hand`` is accepted by the model only so the store can refuse
+    it with its record-a-movement message as a 400 — clearer than a generic
+    unknown-field 422 for the one field a consumer is most tempted to send.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mpn: StrictStr | None = None
+    manufacturer: StrictStr | None = None
+    description: StrictStr | None = None
+    category: StrictStr | None = None
+    min_quantity: StrictInt | None = None
+    unit_cost_cents: StrictInt | None = None
+    supplier: StrictStr | None = None
+    supplier_url: StrictStr | None = None
+    supplier_pn: StrictStr | None = None
+    reorder_qty: StrictInt | None = None
+    location: StrictStr | None = None
+    notes: StrictStr | None = None
+    project: StrictStr | None = None
+    quantity_on_hand: StrictInt | None = None
 
 
 #: The keys every Part JSON object carries — the contract a consumer codes to.
@@ -206,6 +240,30 @@ def build_router(get_store) -> APIRouter:
         if not ticket_ref.strip():
             raise HTTPException(status_code=400, detail="ticket_ref is required")
         return [to_api_movement(m) for m in store.list_movements_by_ticket(ticket_ref)]
+
+    @router.patch("/parts/{part_id}")
+    def patch_part(
+        part_id: int,
+        body: PatchPartRequest,
+        request: Request,
+        store: StoreDep,
+    ) -> dict[str, object]:
+        """Partial update: only the keys sent change; ``null`` clears.
+
+        ``model_fields_set`` distinguishes "absent" from "explicitly null" —
+        the whole point of PATCH. ``unit_cost_cents`` is the wire name (the
+        contract talks cents); the store calls it ``unit_cost``.
+        """
+        updates = {name: getattr(body, name) for name in body.model_fields_set}
+        if "unit_cost_cents" in updates:
+            updates["unit_cost"] = updates.pop("unit_cost_cents")
+        try:
+            part = store.update_part(part_id, **updates)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="no such part") from None
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        return to_api_part(part, str(request.base_url))
 
     @router.post("/parts/{part_id}/consume")
     def consume(
