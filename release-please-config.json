@@ -40,12 +40,12 @@
         {
           "type": "refactor",
           "section": "Refactors",
-          "hidden": false
+          "hidden": true
         },
         {
           "type": "test",
           "section": "Tests",
-          "hidden": false
+          "hidden": true
         },
         {
           "type": "build",
@@ -55,7 +55,7 @@
         {
           "type": "ci",
           "section": "CI",
-          "hidden": false
+          "hidden": true
         },
         {
           "type": "chore",
