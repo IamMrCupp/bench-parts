@@ -5,6 +5,6 @@ benchhud and other LAN clients over a REST API. No PII lives here — parts data
 is stream-safe, unlike its sibling benchhud-intake.
 """
 
-__version__ = "0.1.0"  # x-release-please-version
+__version__ = "0.1.1"  # x-release-please-version
 
 __all__ = ["__version__"]
