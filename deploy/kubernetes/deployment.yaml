@@ -1,0 +1,72 @@
+# ⚠️ replicas MUST stay 1 and strategy MUST stay Recreate, for two reasons,
+# either of which is enough:
+#   1. The store is SQLite: safe with exactly one writer, corruptible with two.
+#      Stock counts are the thing a second writer would get wrong.
+#   2. The login rate limiter is in-memory and per process: a second replica
+#      would keep its own count and quietly halve the throttle.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bench-parts
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bench-parts
+  template:
+    metadata:
+      labels:
+        app: bench-parts
+    spec:
+      containers:
+        - name: bench-parts
+          image: ghcr.io/iammrcupp/bench-parts
+          ports:
+            - containerPort: 8000
+          env:
+            # The database lives on the data volume.
+            - name: BENCH_PARTS_DB_PATH
+              value: /data/parts.db
+            # If the volume is NFS, patch this to "1" in your overlay: it selects
+            # journal_mode=TRUNCATE and synchronous=FULL. WAL, the default,
+            # corrupts on NFS rather than erroring.
+            - name: BENCH_PARTS_SQLITE_NFS
+              value: "0"
+          envFrom:
+            # BENCH_PARTS_PASSWORD_HASH (required), BENCH_PARTS_SESSION_SECRET, and
+            # BENCH_PARTS_API_TOKEN (for benchhud and scripts). See
+            # secret.example.yaml. The app refuses to start with no password
+            # hash, by design.
+            - secretRef:
+                name: bench-parts-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          # /healthz is the one route that answers without a session.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 384Mi
+      securityContext:
+        fsGroup: 1000 # the image runs as uid 1000; the volume must be writable
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bench-parts-data
