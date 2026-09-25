@@ -82,9 +82,28 @@ switching between the two repos costs nothing.
 
 ## Container
 
+Images are on ghcr.io for `linux/amd64` and `linux/arm64`: `:latest` tracks
+`main`, and each release is tagged `:X.Y.Z` and `:X.Y` so a deploy can pin one.
+
+With Docker Compose (or `podman compose`), using the `compose.yaml` here:
+
+```bash
+docker compose run --rm parts bench-parts set-password   # once
+docker compose run --rm parts bench-parts new-token      # for benchhud and scripts
+docker compose up -d                                     # http://127.0.0.1:8000/
+```
+
+The data folder in the image is `/data` (`BENCH_PARTS_DATA_DIR`); compose
+mounts a named volume there, so the database and `settings.env` survive
+upgrades. The container starts with `bench-parts serve`, which reads
+`settings.env` itself, so the `$` in the password hash is never touched by
+Compose's variable expansion. Environment variables still win, which is how the
+cluster passes its Secret.
+
+To build it yourself:
+
 ```bash
 docker build -t bench-parts .
-docker run -p 8000:8000 bench-parts
 ```
 
 The image is built for `linux/amd64` **and `linux/arm64`** — the deploy target is
