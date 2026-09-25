@@ -28,6 +28,9 @@ dependencies = [
 # git-only and installed separately on the bench box; it is invoked as a
 # subprocess, never imported, so it is deliberately NOT a dependency here.
 label = ["pillow>=10.1"]
+# The menu-bar / tray app. Essentials is QtCore, QtGui and QtWidgets only; the
+# server (container, cluster, `serve`) never needs Qt.
+tray = ["pyside6-essentials>=6.8"]
 
 [project.scripts]
 bench-parts = "bench_parts.cli:main"
@@ -44,6 +47,8 @@ dev = [
     "httpx2>=2.7.0",
     # so the label-bridge tests run everywhere the suite does
     "pillow>=10.1",
+    "pyside6-essentials>=6.8",
+    "pytest-qt>=4.4",
 ]
 
 [build-system]
@@ -69,3 +74,28 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# The menu-bar / tray app (#86), packaged with Briefcase like benchhud. Name,
+# version and dependencies come from [project]; this adds what a bundle needs.
+[tool.briefcase]
+project_name = "bench-parts"
+bundle = "com.iammrcupp.benchhud"
+
+[tool.briefcase.app.bench-parts]
+formal_name = "bench parts"
+description = "Bench parts inventory: a menu-bar app that runs the bench-parts server."
+long_description = """bench parts keeps the bench's parts inventory: what's in which drawer,
+what's running low, and what a job used. benchhud reads it over the same API
+scripts can use. This app runs it from the menu bar (macOS) or system tray
+(Windows): start, stop, share on the LAN, set the password and the API token."""
+sources = ["src/bench_parts"]
+requires = ["pyside6-essentials>=6.8"]
+icon = "packaging/icons/parts"
+
+[tool.briefcase.app.bench-parts.macOS]
+# PySide6 6.8+ only ships macosx_13_0 wheels (as in benchhud); one arch per build.
+universal_build = false
+min_os_version = "13.0"
+requires = ["std-nslog~=1.0.3"]
+# A menu-bar app: no Dock icon, no main window.
+info."LSUIElement" = true

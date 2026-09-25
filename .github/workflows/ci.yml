@@ -15,6 +15,9 @@ concurrency:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    env:
+      # The tray tests build a real Qt menu; there's no display in CI.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v5
 
@@ -22,6 +25,12 @@ jobs:
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3
 
       # --frozen: uv.lock is authoritative. A lockfile out of sync with
       # pyproject.toml fails here rather than silently resolving something else.
@@ -51,3 +60,98 @@ jobs:
           cat rendered.yaml
           grep -q "replicas: 1" rendered.yaml || { echo "::error::replicas must be 1"; exit 1; }
           grep -q "type: Recreate" rendered.yaml || { echo "::error::strategy must be Recreate"; exit 1; }
+
+  # The menu-bar app (#86): build it on macOS and prove the packaged app serves.
+  # BENCH_PARTS_TRAY_SMOKE builds the real menu, starts the server, fetches /healthz
+  # and exits 0; anything else is a failure. No display is needed.
+  tray-macos:
+    runs-on: macos-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v5
+
+      # Briefcase bundles the build host's Python, so pin it.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Briefcase
+        run: python -m pip install briefcase
+
+      - name: Build the app
+        run: |
+          briefcase create macOS app --no-input
+          briefcase build macOS app --no-input
+
+      - name: The packaged app serves (smoke)
+        env:
+          BENCH_PARTS_TRAY_SMOKE: "1"
+          BENCH_PARTS_DATA_DIR: ${{ runner.temp }}/parts-data
+        run: |
+          # macOS has no `timeout`; a stuck app must still fail the job.
+          "build/bench-parts/macos/app/bench parts.app/Contents/MacOS/bench parts" &
+          pid=$!
+          for _ in $(seq 120); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "smoke timed out"; exit 1; fi
+          wait "$pid"
+
+      - name: Package (ad-hoc signed)
+        run: briefcase package macOS app --adhoc-sign -p zip --no-input
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-parts-macos
+          path: dist/*.zip
+          if-no-files-found: error
+
+  # The tray app on Windows: build the MSI, install it on the runner, and run
+  # the installed app's smoke test.
+  tray-windows:
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Briefcase
+        run: python -m pip install briefcase
+
+      - name: Build the MSI
+        run: |
+          briefcase create  windows app --no-input
+          briefcase build   windows app --no-input
+          briefcase package windows app --adhoc-sign --no-input
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-parts-msi
+          path: dist/*.msi
+          if-no-files-found: error
+
+      - name: msiexec install (silent)
+        run: |
+          $msi = (Get-ChildItem dist\*.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'msi.log'
+          if ($p.ExitCode -ne 0) { Get-Content msi.log -Tail 80; throw "msiexec exited with $($p.ExitCode)" }
+
+      - name: The installed app serves (smoke)
+        run: |
+          $roots = @($env:ProgramFiles, "$env:LOCALAPPDATA\Programs", $env:LOCALAPPDATA)
+          $exe = Get-ChildItem -Path $roots -Recurse -Filter "bench parts.exe" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $exe) { throw "bench parts.exe not found under: $($roots -join ', ')" }
+          Write-Host "installed at: $($exe.DirectoryName)"
+          $env:BENCH_PARTS_TRAY_SMOKE = "1"
+          $env:BENCH_PARTS_DATA_DIR = "$env:RUNNER_TEMP\parts-data"
+          $p = Start-Process $exe.FullName -PassThru
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "smoke timed out" }
+          if ($p.ExitCode -ne 0) { throw "smoke exited with $($p.ExitCode)" }
+          Write-Host "smoke passed"

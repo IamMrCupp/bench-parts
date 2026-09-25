@@ -86,6 +86,22 @@ def cmd_new_token(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tray(args: argparse.Namespace) -> int:
+    if args.data_dir:
+        os.environ[settings.DATA_DIR_ENV] = str(Path(args.data_dir).expanduser())
+    try:
+        from bench_parts.tray import main as tray_main
+    except ImportError:
+        print(
+            "The tray app needs PySide6. Install the tray extra:\n"
+            "    uv tool install 'bench-parts[tray] @ "
+            "git+https://github.com/IamMrCupp/bench-parts'",
+            file=sys.stderr,
+        )
+        return 2
+    return tray_main()
+
+
 def cmd_paths(args: argparse.Namespace) -> int:
     data = _data(args)
     print(f"data:     {data}")
@@ -112,6 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_new_token
     )
     sub.add_parser("paths", help="show where data and settings live").set_defaults(func=cmd_paths)
+    sub.add_parser("tray", help="run as a menu-bar / tray app").set_defaults(func=cmd_tray)
     return parser
 
 
