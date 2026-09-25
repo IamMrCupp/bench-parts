@@ -30,6 +30,7 @@ dependencies = [
 label = ["pillow>=10.1"]
 
 [project.scripts]
+bench-parts = "bench_parts.cli:main"
 bench-parts-label = "bench_parts.label_bridge:main"
 
 [project.urls]

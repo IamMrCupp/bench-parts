@@ -25,6 +25,35 @@ which is why benchhud can surface it on the HUD ("you're on 26-0001, low on
 IRF7910"). Consumption links to a job by *reference string*; this service never
 calls intake to validate it.
 
+## Installing it as a program
+
+No cluster needed. Install the command with [uv](https://docs.astral.sh/uv/)
+(or pipx), set a password once, and run it:
+
+```bash
+uv tool install git+https://github.com/IamMrCupp/bench-parts
+bench-parts set-password     # required: it won't serve without one
+bench-parts new-token        # the API token for benchhud's Inventory tab and scripts
+bench-parts serve            # http://127.0.0.1:8000/
+```
+
+`serve` stays on this machine by default. `--host 0.0.0.0` shares it on the LAN
+so a tablet (or benchhud on another machine) can reach it. Keep it off public
+networks.
+
+Everything lives in one per-user folder. `bench-parts paths` shows it:
+
+| OS | Data folder |
+|---|---|
+| macOS | `~/Library/Application Support/bench-parts` |
+| Windows | `%APPDATA%\bench-parts` |
+| Linux | `$XDG_DATA_HOME/bench-parts` (`~/.local/share/…`) |
+
+It holds `parts.db` and `settings.env`, the owner-only settings file that
+`set-password` and `new-token` write. `--data-dir` or `BENCH_PARTS_DATA_DIR`
+points it elsewhere. **Environment variables always win over the settings
+file**, so the container and the cluster deployment below work exactly as before.
+
 ## Running it locally
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.12 is pinned via
