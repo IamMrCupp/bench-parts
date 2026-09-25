@@ -1,0 +1,13 @@
+# ClusterIP by default. Expose it on your LAN (a LoadBalancer IP, or a LAN-only
+# ingress) in an overlay. Keep it off public networks: it's a read-write API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bench-parts
+spec:
+  selector:
+    app: bench-parts
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

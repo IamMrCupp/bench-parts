@@ -1,0 +1,12 @@
+# The database and (if used) settings.env. The cluster's
+# default storage class unless your overlay sets storageClassName.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bench-parts-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
