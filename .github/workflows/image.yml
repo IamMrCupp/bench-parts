@@ -14,13 +14,23 @@ on:
       - "**/*.md"
       - "LICENSE"
       - ".github/pull_request_template.md"
+  # release-please calls this with the new version after a release. A tag it
+  # pushes with the Actions token can't trigger a workflow on its own.
+  workflow_call:
+    inputs:
+      version:
+        description: "Release tag, e.g. v0.3.0"
+        type: string
+        required: true
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: image-${{ github.ref }}
+  # The version keeps a release build from cancelling the latest build that the
+  # same push to main starts.
+  group: image-${{ github.ref }}-${{ inputs.version }}
   cancel-in-progress: true
 
 jobs:
@@ -44,13 +54,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # :latest from main; :X.Y.Z and :X.Y for a release, so a deploy can pin.
+      - name: Tags
+        id: tags
+        run: |
+          image=ghcr.io/iammrcupp/bench-parts
+          version="${{ inputs.version }}"
+          if [ -n "$version" ]; then
+            v="${version#v}"
+            echo "tags=$image:$v,$image:${v%.*}" >> "$GITHUB_OUTPUT"
+            echo "first=$image:$v" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=$image:latest" >> "$GITHUB_OUTPUT"
+            echo "first=$image:latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build (and push on main)
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' }}
-          tags: ghcr.io/iammrcupp/bench-parts:latest
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -61,7 +86,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           set -euo pipefail
-          manifest=$(docker buildx imagetools inspect ghcr.io/iammrcupp/bench-parts:latest)
+          manifest=$(docker buildx imagetools inspect ${{ steps.tags.outputs.first }})
           echo "$manifest"
           if ! grep -q 'linux/arm64' <<<"$manifest"; then
             echo "::error::published manifest does not advertise linux/arm64"
