@@ -38,3 +38,5 @@ build/
 *.swo
 *~
 # claude-project-kit — managed block END
+# Generated for the .deb build from uv.lock (CI); never committed.
+requirements.txt

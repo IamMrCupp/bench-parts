@@ -1,0 +1,6 @@
+#!/bin/sh
+# The .deb's command: the same `bench-parts`, defaulting to the service's
+# data folder so `sudo bench-parts set-password` configures the service.
+: "${BENCH_PARTS_DATA_DIR:=/var/lib/bench-parts}"
+export BENCH_PARTS_DATA_DIR
+exec /opt/bench-parts/bin/bench-parts "$@"

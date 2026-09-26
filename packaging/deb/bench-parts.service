@@ -1,0 +1,41 @@
+[Unit]
+Description=bench parts (parts inventory web app and API)
+Documentation=https://github.com/IamMrCupp/bench-parts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=bench-parts
+Group=bench-parts
+# The data folder: the database. systemd creates it, owned by the
+# service user.
+StateDirectory=bench-parts
+StateDirectoryMode=0750
+Environment=BENCH_PARTS_DATA_DIR=/var/lib/bench-parts
+# Loopback unless settings.env says BENCH_PARTS_HOST=0.0.0.0 (a tablet on the LAN).
+Environment=BENCH_PARTS_HOST=127.0.0.1
+Environment=BENCH_PARTS_PORT=8000
+# The password hash and tokens, written by `sudo bench-parts set-password`.
+# systemd reads it as root; the file stays root-only. Values win over the lines
+# above.
+EnvironmentFile=-/var/lib/bench-parts/settings.env
+ExecStart=/opt/bench-parts/bin/bench-parts serve --host ${BENCH_PARTS_HOST} --port ${BENCH_PARTS_PORT}
+Restart=on-failure
+RestartSec=5
+# Exit 2 is "no password set": restarting won't fix that, so don't loop.
+RestartPreventExitStatus=2
+
+# Give it as little of the system as it needs.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

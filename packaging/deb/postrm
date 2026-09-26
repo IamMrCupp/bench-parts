@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+# The data (the inventory) and the service user are kept, even on purge:
+# deleting records should never be a side effect of removing a package.
+exit 0

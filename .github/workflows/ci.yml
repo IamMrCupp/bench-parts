@@ -155,3 +155,111 @@ jobs:
           if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "smoke timed out" }
           if ($p.ExitCode -ne 0) { throw "smoke exited with $($p.ExitCode)" }
           Write-Host "smoke passed"
+
+  # The headless-Linux install (#87): a .deb that runs bench-parts as a systemd
+  # service. Built in ubuntu:26.04 (the bench's release) for amd64 and the
+  # Raspberry Pis' arm64. The newest tar can't stat the venv's symlinks under
+  # QEMU, so the container only stages the tree and the runner packs it.
+  deb:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.arch == 'arm64'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Locked requirements
+        run: uv export --frozen --no-dev --no-hashes --no-emit-project -q > requirements.txt
+
+      - name: Stage the package tree (ubuntu:26.04)
+        run: |
+          docker run --rm --platform linux/${{ matrix.arch }} \
+            -e DEB_ROOT=/src/build/debroot -e STAGE_ONLY=1 \
+            -v "$PWD":/src -w /src ubuntu:26.04 sh packaging/deb/build.sh
+
+      - name: Pack it
+        run: |
+          mkdir -p dist
+          dpkg-deb --build --root-owner-group build/debroot dist/
+          dpkg-deb --info dist/*.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-parts-deb-${{ matrix.arch }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  # Install it on a clean ubuntu:26.04 running systemd as PID 1 (natively on
+  # amd64), and check the service the way an operator would meet it.
+  deb-verify:
+    needs: deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bench-parts-deb-amd64
+          path: dist
+
+      - name: Boot ubuntu:26.04 with systemd
+        run: |
+          printf '%s\n' \
+            'FROM ubuntu:26.04' \
+            'RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends systemd systemd-sysv curl dbus && rm -rf /var/lib/apt/lists/*' \
+            'STOPSIGNAL SIGRTMIN+3' \
+            'CMD ["/sbin/init"]' > Dockerfile.systemd
+          docker build -q -t sd -f Dockerfile.systemd .
+          docker run -d --name sd --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw sd
+          for _ in $(seq 30); do
+            state=$(docker exec sd systemctl is-system-running 2>/dev/null || true)
+            case "$state" in running|degraded) break ;; esac
+            sleep 1
+          done
+          echo "systemd: $state"
+
+      - name: apt install the package
+        run: |
+          # Not /tmp: systemd mounts a tmpfs over it, hiding what docker cp puts there.
+          docker exec sd mkdir -p /root/dist
+          docker cp dist/. sd:/root/dist/
+          docker exec sd sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /root/dist/*.deb'
+
+      - name: It installed a disabled-until-configured service
+        run: |
+          docker exec sd sh -ec '
+            id bench-parts
+            test "$(stat -c %U:%a /var/lib/bench-parts)" = "bench-parts:750"
+            test "$(systemctl is-enabled bench-parts)" = enabled
+            bench-parts paths | grep -q "/var/lib/bench-parts/settings.env"
+          '
+
+      - name: With no password it refuses once and doesn't restart-loop
+        run: |
+          docker exec sd sh -c 'systemctl start bench-parts; sleep 10'
+          props=$(docker exec sd systemctl show bench-parts -p ActiveState -p ExecMainStatus -p NRestarts)
+          echo "$props"
+          echo "$props" | grep -q "ExecMainStatus=2"
+          echo "$props" | grep -q "NRestarts=0"
+          echo "$props" | grep -q "ActiveState=failed"
+
+      - name: With a password it serves, as its own user
+        run: |
+          docker exec sd sh -ec '
+            printf "ci password\nci password\n" | bench-parts set-password
+            test "$(stat -c %U:%a /var/lib/bench-parts/settings.env)" = "root:600"
+            systemctl reset-failed bench-parts
+            systemctl start bench-parts
+            for _ in $(seq 30); do curl -fsS http://127.0.0.1:8000/healthz && break; sleep 1; done
+            echo
+            pid=$(systemctl show -p MainPID --value bench-parts)
+            test "$(stat -c %U /proc/$pid)" = bench-parts
+          ' || { docker exec sd journalctl -u bench-parts --no-pager | tail -30; exit 1; }
+          docker exec sd systemctl status bench-parts --no-pager | head -12
+          docker exec sd systemd-analyze security bench-parts --no-pager | tail -1
