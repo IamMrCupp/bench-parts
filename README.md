@@ -47,6 +47,31 @@ CI builds it on every PR: `bench-parts-macos` (a zipped `.app`) and
 To build the app yourself: `uvx briefcase create macOS app && uvx briefcase build macOS app`
 (or `windows`). `scripts/make_icons.py` regenerates the icons.
 
+## On a Linux box, as a service
+
+For a headless bench machine or a Pi: a `.deb` that runs bench-parts under systemd.
+CI builds it for `amd64` and `arm64` on every PR (`bench-parts-deb-amd64`,
+`bench-parts-deb-arm64`), for Ubuntu 26.04.
+
+```bash
+sudo apt install ./bench-parts_<version>_amd64.deb
+sudo bench-parts set-password     # it won't start without one
+sudo bench-parts new-token        # for benchhud and scripts
+sudo systemctl start bench-parts  # http://127.0.0.1:8000/
+```
+
+- It runs as its own `bench-parts` system user, with its data in
+  `/var/lib/bench-parts`, and it's enabled to start at boot.
+- `settings.env` there stays **root-only**. systemd reads it and passes the
+  password and token in, so the service user never can.
+- It listens on loopback. For a tablet or benchhud on another machine, add
+  `BENCH_PARTS_HOST=0.0.0.0` to
+  `settings.env` and `sudo systemctl restart bench-parts`.
+- With no password it fails once and stays stopped, rather than restarting in
+  a loop. `journalctl -u bench-parts` says why.
+- Removing the package keeps the data and the service user: deleting your
+  inventory should never be a side effect of `apt remove`.
+
 ## Installing it as a program
 
 No cluster needed. Install the command with [uv](https://docs.astral.sh/uv/)

@@ -54,11 +54,18 @@ def settings_path(data: Path) -> Path:
 
 
 def read_settings(path: Path) -> dict[str, str]:
-    """``KEY=value`` pairs from ``path``; blank lines and ``#`` comments skipped."""
-    if not path.exists():
+    """``KEY=value`` pairs from ``path``; blank lines and ``#`` comments skipped.
+
+    An unreadable file counts as empty. That's the .deb's service: systemd reads
+    the root-owned settings.env and passes its values in as environment
+    variables, so the service user needn't (and can't) read it itself.
+    """
+    try:
+        text = path.read_text("utf-8")
+    except (FileNotFoundError, PermissionError):
         return {}
     values: dict[str, str] = {}
-    for raw in path.read_text("utf-8").splitlines():
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

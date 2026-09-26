@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    if ! getent passwd bench-parts >/dev/null; then
+        useradd --system --user-group --home-dir /var/lib/bench-parts \
+            --no-create-home --shell /usr/sbin/nologin bench-parts
+    fi
+    install -d -o bench-parts -g bench-parts -m 0750 /var/lib/bench-parts
+fi
+
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable bench-parts.service >/dev/null 2>&1 || true
+    # Restart on upgrade; on a fresh install there's no password yet, and the
+    # service refuses to start without one (by design).
+    if [ -n "$2" ]; then
+        systemctl try-restart bench-parts.service >/dev/null 2>&1 || true
+    fi
+fi
+
+if [ -z "$2" ]; then
+    cat <<'MSG'
+
+bench-parts is installed. Set a password, then start it:
+
+    sudo bench-parts set-password
+    sudo systemctl start bench-parts
+
+It listens on 127.0.0.1:8000. For a tablet, or benchhud on another machine,
+add BENCH_PARTS_HOST=0.0.0.0 to /var/lib/bench-parts/settings.env and restart
+it. Keep it off public networks.
+
+MSG
+fi
+exit 0

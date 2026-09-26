@@ -47,6 +47,19 @@ def test_settings_keep_other_keys_and_take_values_literally(tmp_path) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_an_unreadable_settings_file_counts_as_empty(tmp_path, monkeypatch) -> None:
+    """The .deb service: systemd passes the root-owned file's values in itself."""
+    path = tmp_path / "settings.env"
+    settings.write_setting(path, "BENCH_PARTS_API_TOKEN", "tok")
+
+    def denied(*_a, **_k):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(type(path), "read_text", denied)
+    assert settings.read_settings(path) == {}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
 def test_the_settings_file_is_owner_only(tmp_path) -> None:
     path = tmp_path / "settings.env"
     settings.write_setting(path, "BENCH_PARTS_API_TOKEN", "tok")
