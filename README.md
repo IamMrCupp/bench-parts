@@ -25,6 +25,28 @@ which is why benchhud can surface it on the HUD ("you're on 26-0001, low on
 IRF7910"). Consumption links to a job by *reference string*; this service never
 calls intake to validate it.
 
+## The menu-bar app
+
+On a Mac or Windows PC, the easiest way to run bench-parts is the app: it lives in the
+menu bar (macOS) or system tray (Windows), with no window of its own.
+
+- **First launch** asks for a password. It won't serve the inventory, or its API,
+  without one.
+- The menu shows whether it's running and where, with **Open in browser**,
+  **Share on the LAN** (so a tablet can reach it), **Start at login**,
+  **Set password…**, **New API token…** (copied to the clipboard for benchhud's
+  Inventory tab), **Open data folder** and **Quit**.
+- It uses the same data folder and `settings.env` as `bench-parts serve`,
+  so you can switch between the two.
+
+CI builds it on every PR: `bench-parts-macos` (a zipped `.app`) and
+`bench-parts-msi`. Each is launched in a smoke mode that serves and answers
+`/healthz` before the job passes. From a `uv tool` install, run it with
+`bench-parts tray` (install the `tray` extra: `'bench-parts[tray] @ git+…'`).
+
+To build the app yourself: `uvx briefcase create macOS app && uvx briefcase build macOS app`
+(or `windows`). `scripts/make_icons.py` regenerates the icons.
+
 ## Installing it as a program
 
 No cluster needed. Install the command with [uv](https://docs.astral.sh/uv/)
