@@ -36,6 +36,26 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
+# A LAN web app needs sockets and nothing else exotic: TCP in both families,
+# plus AF_UNIX for glibc's resolver/journal plumbing.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# @system-service covers a Python web server; native-only stops 32-bit
+# syscall-table tricks on a 64-bit host.
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+# Runs as an unprivileged user on an unprivileged port — no capabilities at all.
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictNamespaces=yes
+RestrictRealtime=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+# The service can see only its own /proc entries; host tooling is unaffected.
+ProtectProc=invisible
+ProcSubset=pid
+# Everything it writes (the database) is service-private.
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
