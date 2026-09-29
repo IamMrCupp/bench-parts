@@ -74,6 +74,11 @@ sudo systemctl start bench-parts  # http://127.0.0.1:8000/
 
 - It runs as its own `bench-parts` system user, with its data in
   `/var/lib/bench-parts`, and it's enabled to start at boot.
+- It runs **sandboxed**: no capabilities, a read-only view of the system
+  (`ProtectSystem=strict`) with only its data folder writable, its own `/tmp`,
+  no devices, TCP and local sockets only, and systemd's `@system-service`
+  syscall set. CI checks `systemd-analyze security` stays at or below **4.0**,
+  so it can't quietly loosen.
 - `settings.env` there stays **root-only**. systemd reads it and passes the
   password and token in, so the service user never can.
 - It listens on loopback. For a tablet or benchhud on another machine, add
