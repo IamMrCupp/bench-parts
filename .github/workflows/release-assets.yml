@@ -26,6 +26,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ inputs.tag }}
+      full: true
 
   attach:
     needs: build
