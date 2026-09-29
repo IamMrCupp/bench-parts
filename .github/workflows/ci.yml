@@ -3,7 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
   pull_request:
+    # `labeled` so adding the `full-ci` label re-runs with the macOS, Windows
+    # and arm64 builds (see the `if:` on those jobs).
+    types: [opened, synchronize, reopened, labeled]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+  # A full run by hand, every platform.
+  workflow_dispatch:
   # A release builds its installers with exactly these jobs and checks, at the
   # release tag (release-assets.yml). Empty ref = the event's own commit.
   workflow_call:
@@ -12,6 +25,11 @@ on:
         type: string
         required: false
         default: ""
+      # A release passes true: build and check every platform.
+      full:
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -79,6 +97,9 @@ jobs:
   # BENCH_PARTS_TRAY_SMOKE builds the real menu, starts the server, fetches /healthz
   # and exits 0; anything else is a failure. No display is needed.
   tray-macos:
+    # macOS and Windows runners cost 10x and 2x Linux minutes, so this runs
+    # for releases, by hand, or on a PR labelled full-ci, not on every push.
+    if: inputs.full || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: macos-latest
     env:
       QT_QPA_PLATFORM: offscreen
@@ -124,6 +145,9 @@ jobs:
   # The tray app on Windows: build the MSI, install it on the runner, and run
   # the installed app's smoke test.
   tray-windows:
+    # macOS and Windows runners cost 10x and 2x Linux minutes, so this runs
+    # for releases, by hand, or on a PR labelled full-ci, not on every push.
+    if: inputs.full || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: windows-latest
     env:
       QT_QPA_PLATFORM: offscreen
@@ -182,7 +206,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        # arm64 builds under QEMU (slow), so only for the same full runs as the
+        # macOS and Windows jobs. amd64 builds and is install-checked every time.
+        arch: ${{ fromJSON((inputs.full || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '["amd64","arm64"]' || '["amd64"]') }}
     steps:
       - uses: actions/checkout@v5
         with:
