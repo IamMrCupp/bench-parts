@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/IamMrCupp/bench-parts/compare/v0.2.0...v0.2.1) (2026-09-29)
+
+
+### Documentation
+
+* **readme:** describe the service's systemd sandbox ([ef85ce5](https://github.com/IamMrCupp/bench-parts/commit/ef85ce5fce700db9b082150112e29353a4891632))
+
 ## [0.2.0](https://github.com/IamMrCupp/bench-parts/compare/v0.1.0...v0.2.0) (2026-09-26)
 
 
