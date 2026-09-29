@@ -1,0 +1,50 @@
+name: release-assets
+
+# Build a release's installers and attach them to its GitHub Release, so a
+# release carries its own downloads instead of a CI artifact to hunt for.
+# release-please calls this when it cuts a release; run it by hand to build
+# and attach for an existing tag.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and attach, e.g. v0.3.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # The same jobs and install checks every PR runs, at the tag.
+  build:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag }}
+
+  attach:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          shopt -s nullglob
+          # Release assets can't sensibly carry spaces in their names.
+          for f in dist/*' '*; do mv "$f" "${f// /-}"; done
+          files=(dist/*.deb dist/*.msi dist/*.zip)
+          if [ ${#files[@]} -eq 0 ]; then echo "no installers built"; ls -l dist; exit 1; fi
+          ls -l "${files[@]}"
+          gh release upload "$TAG" "${files[@]}" --clobber -R "$GITHUB_REPOSITORY"
