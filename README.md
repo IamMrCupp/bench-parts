@@ -25,6 +25,18 @@ which is why benchhud can surface it on the HUD ("you're on 26-0001, low on
 IRF7910"). Consumption links to a job by *reference string*; this service never
 calls intake to validate it.
 
+## Downloads
+
+Every [release](https://github.com/IamMrCupp/bench-parts/releases) has its installers
+attached: the Linux service `.deb` (amd64 and arm64), the Windows tray-app MSI
+and the macOS tray app. They're built by the same CI jobs every PR runs, at the
+release tag, including the install checks. The macOS app is ad-hoc signed, so
+the first launch needs right-click → Open.
+
+```bash
+gh release download --repo IamMrCupp/bench-parts --pattern '*_amd64.deb'
+```
+
 ## The menu-bar app
 
 On a Mac or Windows PC, the easiest way to run bench-parts is the app: it lives in the

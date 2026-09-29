@@ -4,12 +4,22 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A release builds its installers with exactly these jobs and checks, at the
+  # release tag (release-assets.yml). Empty ref = the event's own commit.
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # The workflow name keeps a release build (called from release-please) and the
+  # normal build of the same push to main from cancelling each other.
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,6 +30,8 @@ jobs:
       QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Install uv
         run: |
@@ -52,6 +64,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Render deploy/kubernetes
         run: |
@@ -70,6 +84,8 @@ jobs:
       QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       # Briefcase bundles the build host's Python, so pin it.
       - uses: actions/setup-python@v5
@@ -116,6 +132,8 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -167,6 +185,8 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: docker/setup-qemu-action@v3
         if: matrix.arch == 'arm64'
