@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.2](https://github.com/IamMrCupp/bench-parts/compare/v0.2.1...v0.2.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **release:** download only the installer artifacts, not the image build record ([46a367c](https://github.com/IamMrCupp/bench-parts/commit/46a367c6278c289f583e25042b8fd715beffa8ff))
+
+
+### Documentation
+
+* **readme:** the tray apps come from releases, not every PR ([a479984](https://github.com/IamMrCupp/bench-parts/commit/a47998444d8b717f364b0c8f903cabb307a9c039))
+
 ## [0.2.1](https://github.com/IamMrCupp/bench-parts/compare/v0.2.0...v0.2.1) (2026-09-29)
 
 
