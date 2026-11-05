@@ -30,6 +30,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from bench_parts.asset_store import AssetStore
 from bench_parts.auth import COOKIE_SECURE_ENV_VAR, ENV_VAR, SESSION_ENV_VAR, hash_password
 from bench_parts.db import connect
 from bench_parts.schema import initialise
@@ -105,6 +106,13 @@ def store(db_path):
     """Direct store access to the same database the app is serving."""
     with connect(db_path) as conn:
         yield PartStore(conn)
+
+
+@pytest.fixture
+def asset_store(db_path):
+    """Direct asset-store access to the same database the app is serving."""
+    with connect(db_path) as conn:
+        yield AssetStore(conn)
 
 
 @pytest.fixture

@@ -23,9 +23,16 @@ from __future__ import annotations
 
 import sqlite3
 
-from bench_parts.vocabulary import Category, MovementReason, sql_in_list
+from bench_parts.vocabulary import (
+    AssetAction,
+    AssetStatus,
+    AssetType,
+    Category,
+    MovementReason,
+    sql_in_list,
+)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 _CREATE_PARTS = f"""
@@ -133,6 +140,101 @@ _CREATE_MOVEMENTS_PART_INDEX = (
 )
 
 
+# --- assets (v6) -------------------------------------------------------------
+#
+# Durable, serialized test gear — assigned to an engagement and returned, never
+# consumed. A separate model from `parts` on purpose: the fields differ (a
+# serial and a single unit, not a count) and the ledger records lifecycle
+# transitions, not signed stock deltas. Consumables stay in `parts`, untouched.
+#
+# `status` and `assigned_ref` are a CACHE; `asset_movements` is the source of
+# truth, exactly as `movements` is for `parts.quantity_on_hand`. The store
+# updates both in one transaction and can rebuild the cache from the log.
+_CREATE_ASSETS = f"""
+CREATE TABLE IF NOT EXISTS assets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    -- A human name for the unit: "HackRF One #2", "J-Link EDU". Required —
+    -- it's what you read off the shelf and off the HUD.
+    name          TEXT    NOT NULL,
+    asset_type    TEXT    NOT NULL,
+
+    manufacturer  TEXT,
+    model         TEXT,
+    -- Serial / unit identifier. The best discriminator between two otherwise
+    -- identical probes — see the interface-monitor port-binding note. Nullable
+    -- and NOT unique: salvaged or unmarked gear has none.
+    serial        TEXT,
+    location      TEXT,
+    notes         TEXT,
+
+    -- Cache of the latest lifecycle state, derived from asset_movements and
+    -- updated in the same transaction as the ledger insert.
+    status        TEXT    NOT NULL DEFAULT '{AssetStatus.AVAILABLE.value}',
+
+    -- The engagement this asset is out on, e.g. "R26-0004". Stored verbatim and
+    -- NEVER validated against bench-recon — loose coupling across services, the
+    -- same discipline as movements.ticket_ref.
+    assigned_ref  TEXT,
+
+    created_at    TEXT    NOT NULL,
+    updated_at    TEXT    NOT NULL,
+
+    CONSTRAINT known_asset_type CHECK (asset_type IN ({sql_in_list(AssetType)})),
+    CONSTRAINT known_asset_status CHECK (status IN ({sql_in_list(AssetStatus)})),
+
+    -- An engagement ref is set exactly when assigned. The backstop behind the
+    -- store's in-transaction cache update: if this ever fires, the cache and
+    -- the ledger have diverged.
+    CONSTRAINT assigned_ref_iff_assigned CHECK (
+        (status = '{AssetStatus.ASSIGNED.value}' AND assigned_ref IS NOT NULL)
+        OR (status != '{AssetStatus.ASSIGNED.value}' AND assigned_ref IS NULL)
+    )
+);
+"""
+
+_CREATE_ASSETS_TYPE_INDEX = "CREATE INDEX IF NOT EXISTS idx_assets_type ON assets (asset_type);"
+# The filter benchhud's interface monitor hits: gear tied to an engagement.
+_CREATE_ASSETS_ASSIGNED_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_assets_assigned_ref ON assets (assigned_ref);"
+)
+
+# The append-only asset ledger. Every lifecycle transition lands here; no UPDATE
+# or DELETE path should ever touch it. That's what makes the status cache
+# rebuildable and an asset's custody reconstructable after the fact.
+_CREATE_ASSET_MOVEMENTS = f"""
+CREATE TABLE IF NOT EXISTS asset_movements (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id       INTEGER NOT NULL REFERENCES assets (id) ON DELETE CASCADE,
+
+    action         TEXT    NOT NULL,
+
+    -- The engagement ref on an `assign` row; NULL for every other action.
+    engagement_ref TEXT,
+
+    -- Optional free-text context ("left with client", "flaky USB port").
+    note           TEXT,
+
+    created_at     TEXT    NOT NULL,
+
+    CONSTRAINT known_asset_action CHECK (action IN ({sql_in_list(AssetAction)}))
+);
+"""
+
+_CREATE_ASSET_MOVEMENTS_ASSET_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_asset_movements_asset ON asset_movements (asset_id);"
+)
+
+
+def _create_assets(conn: sqlite3.Connection) -> None:
+    """Create the asset tables and their indexes. Idempotent (``IF NOT EXISTS``)."""
+    conn.execute(_CREATE_ASSETS)
+    conn.execute(_CREATE_ASSETS_TYPE_INDEX)
+    conn.execute(_CREATE_ASSETS_ASSIGNED_INDEX)
+    conn.execute(_CREATE_ASSET_MOVEMENTS)
+    conn.execute(_CREATE_ASSET_MOVEMENTS_ASSET_INDEX)
+
+
 def _upgrade_to_v2(conn: sqlite3.Connection) -> None:
     """The v1 → v2 table rebuild — extend the category CHECK (Filament, Module).
 
@@ -188,6 +290,18 @@ def _upgrade_to_v5(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "parts", "reorder_qty", "INTEGER")
 
 
+def _upgrade_to_v6(conn: sqlite3.Connection) -> None:
+    """v5 → v6: the durable-asset model — two brand-new tables.
+
+    Nothing existing is touched: this is a pure additive ``CREATE``, not a
+    rebuild, so there's no data to copy and no ids to preserve. It still runs
+    through :func:`_migrate` for the atomic ``BEGIN IMMEDIATE`` / ``user_version``
+    bump and the post-migration foreign-key check — the proven path, even where
+    the FK-off-around-a-rebuild half of it is a no-op for a plain create.
+    """
+    _create_assets(conn)
+
+
 def _migrate(conn: sqlite3.Connection, step, version: int) -> None:
     """Run one table-rebuild migration step atomically and FK-safely.
 
@@ -238,13 +352,14 @@ def initialise(conn: sqlite3.Connection) -> None:
 
     if current == 0:
         # Fresh database: the CREATEs carry the current schema, including the
-        # v2 category list — nothing to migrate.
+        # v2 category list and the v6 asset tables — nothing to migrate.
         with conn:
             conn.execute(_CREATE_PARTS)
             conn.execute(_CREATE_PARTS_MPN_INDEX)
             conn.execute(_CREATE_PARTS_CATEGORY_INDEX)
             conn.execute(_CREATE_MOVEMENTS)
             conn.execute(_CREATE_MOVEMENTS_PART_INDEX)
+            _create_assets(conn)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         return
 
@@ -258,3 +373,5 @@ def initialise(conn: sqlite3.Connection) -> None:
         _migrate(conn, _upgrade_to_v4, 4)
     if current < 5:
         _migrate(conn, _upgrade_to_v5, 5)
+    if current < 6:
+        _migrate(conn, _upgrade_to_v6, 6)
