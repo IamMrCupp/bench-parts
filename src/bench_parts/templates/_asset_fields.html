@@ -1,0 +1,42 @@
+{# The asset catalogue fields, shared by the add and edit forms so the two
+   can't drift. Expects `values` (strings) in context. No status/assignment
+   field: those move only through the lifecycle controls, which write a ledger
+   row. #}
+
+<fieldset>
+  <legend>What it is</legend>
+
+  <label for="name">Name
+    <span class="hint">e.g. HackRF One #1, J-Link EDU — what you'd read off the shelf</span>
+  </label>
+  <input id="name" name="name" value="{{ values.name }}" required autocapitalize="words" />
+
+  <label for="asset_type">Type</label>
+  <select id="asset_type" name="asset_type">
+    {% for t in asset_types %}
+      <option value="{{ t.value }}" {% if t.value == values.asset_type %}selected{% endif %}>{{ t.label }}</option>
+    {% endfor %}
+  </select>
+
+  <label for="manufacturer">Manufacturer <span class="hint">Optional</span></label>
+  <input id="manufacturer" name="manufacturer" value="{{ values.manufacturer }}" />
+
+  <label for="model">Model <span class="hint">Optional</span></label>
+  <input id="model" name="model" value="{{ values.model }}" />
+
+  <label for="serial">Serial / unit ID
+    <span class="hint">Optional — the best way to tell two identical probes apart</span>
+  </label>
+  <input id="serial" name="serial" value="{{ values.serial }}"
+         autocapitalize="characters" autocorrect="off" spellcheck="false" />
+</fieldset>
+
+<fieldset>
+  <legend>Where it lives</legend>
+
+  <label for="location">Location <span class="hint">Bin, drawer, shelf</span></label>
+  <input id="location" name="location" value="{{ values.location }}" />
+
+  <label for="notes">Notes <span class="hint">Optional</span></label>
+  <textarea id="notes" name="notes">{{ values.notes }}</textarea>
+</fieldset>

@@ -29,7 +29,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from bench_parts import api, asset_api, auth
-from bench_parts.asset_store import AssetStore
+from bench_parts.asset_store import Asset, AssetStore
 from bench_parts.auth import verify_password
 from bench_parts.db import connect
 from bench_parts.forms import (
@@ -41,7 +41,7 @@ from bench_parts.forms import (
 from bench_parts.ratelimit import RateLimiter
 from bench_parts.schema import initialise
 from bench_parts.store import Part, PartStore
-from bench_parts.vocabulary import Category
+from bench_parts.vocabulary import AssetStatus, AssetType, Category
 
 
 @asynccontextmanager
@@ -327,6 +327,8 @@ def _dollars(cents: int | None) -> str:
 templates.env.filters["dollars"] = _dollars
 # Every template gets the category list for filters and selects, in enum order.
 templates.env.globals["categories"] = list(Category)
+# And the asset-type list, for the asset catalogue filter and the add/edit form.
+templates.env.globals["asset_types"] = list(AssetType)
 
 
 def get_db_path() -> Path:
@@ -972,3 +974,317 @@ def export_movements(store: StoreDep) -> Response:
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="bench-parts-movements.csv"'},
     )
+
+
+# --- assets ------------------------------------------------------------------
+#
+# The durable-asset UI: a catalogue, add/edit, and the assign/return/repair/
+# retire lifecycle controls — the browser face over the same AssetStore the
+# JSON API uses. Separate from the parts screens on purpose; assets are
+# assigned to an engagement and returned, not consumed against a job.
+
+AssetStoreDep = Annotated[AssetStore, Depends(get_asset_store)]
+
+#: Every field the asset add/edit forms post. Used to echo a rejected attempt
+#: back so nothing typed is lost.
+_ASSET_FIELDS = ("name", "asset_type", "manufacturer", "model", "serial", "location", "notes")
+
+
+def _require_asset(store: AssetStore, asset_id: int) -> Asset:
+    asset = store.get_asset(asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="no such asset")
+    return asset
+
+
+@app.get("/assets", response_class=HTMLResponse)
+def asset_catalogue(
+    request: Request,
+    store: AssetStoreDep,
+    asset_type: str = "",
+    assigned_ref: str = "",
+    status: str = "",
+    show_retired: str = "",
+) -> HTMLResponse:
+    """The asset registry — filter by type, engagement ref, or status.
+
+    An unknown type or status is a 400, same reasoning as the parts catalogue:
+    a typo'd filter that silently shows an empty shelf is worse than an error.
+    """
+    include_retired = show_retired not in ("", "0")
+    try:
+        assets = store.list_assets(
+            asset_type=asset_type or None,
+            assigned_ref=assigned_ref or None,
+            status=status or None,
+            include_retired=include_retired,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    retired_count = (
+        0
+        if include_retired
+        else sum(1 for a in store.list_assets(include_retired=True) if a.retired)
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="assets.html",
+        context={
+            "assets": assets,
+            "asset_type": asset_type,
+            "assigned_ref": assigned_ref,
+            "status": status,
+            "statuses": list(AssetStatus),
+            "engagement_refs": store.list_engagement_refs(),
+            "show_retired": include_retired,
+            "retired_count": retired_count,
+        },
+    )
+
+
+def _render_asset_form(
+    request: Request,
+    values: dict[str, str] | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="asset_form.html",
+        context={
+            "values": {name: (values or {}).get(name, "") for name in _ASSET_FIELDS},
+            "error": error,
+        },
+        status_code=status_code,
+    )
+
+
+@app.get("/assets/new", response_class=HTMLResponse)
+def new_asset_form(request: Request, store: AssetStoreDep) -> HTMLResponse:
+    """The add-an-asset form."""
+    return _render_asset_form(request)
+
+
+@app.post("/assets")
+def create_asset(
+    request: Request,
+    store: AssetStoreDep,
+    name: Annotated[str, Form()] = "",
+    asset_type: Annotated[str, Form()] = "",
+    manufacturer: Annotated[str, Form()] = "",
+    model: Annotated[str, Form()] = "",
+    serial: Annotated[str, Form()] = "",
+    location: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+) -> Response:
+    """Register an asset. Redirects to its detail page on success; hands the
+    form back with everything still in it on a rejection."""
+    submitted = {
+        "name": name,
+        "asset_type": asset_type,
+        "manufacturer": manufacturer,
+        "model": model,
+        "serial": serial,
+        "location": location,
+        "notes": notes,
+    }
+    try:
+        asset = store.create_asset(
+            name=name,
+            asset_type=asset_type,
+            manufacturer=manufacturer,
+            model=model,
+            serial=serial,
+            location=location,
+            notes=notes,
+        )
+    except ValueError as exc:
+        return _render_asset_form(request, values=submitted, error=str(exc), status_code=400)
+
+    flash(request, f"Added {asset.name}")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+def _asset_edit_values(asset: Asset) -> dict[str, str]:
+    return {
+        "name": asset.name,
+        "asset_type": asset.asset_type.value,
+        "manufacturer": asset.manufacturer or "",
+        "model": asset.model or "",
+        "serial": asset.serial or "",
+        "location": asset.location or "",
+        "notes": asset.notes or "",
+    }
+
+
+def _render_asset_detail(
+    request: Request,
+    store: AssetStore,
+    asset: Asset,
+    values: dict[str, str] | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    movements = store.list_asset_movements(asset.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="asset_detail.html",
+        context={
+            "asset": asset,
+            "movements": movements,
+            # Delete is only possible before an asset has ever been assigned.
+            "deletable": not any(m.action.value == "assign" for m in movements),
+            "values": values or _asset_edit_values(asset),
+            "error": error,
+        },
+        status_code=status_code,
+    )
+
+
+@app.get("/assets/{asset_id}", response_class=HTMLResponse)
+def asset_detail(request: Request, asset_id: int, store: AssetStoreDep) -> HTMLResponse:
+    """Everything about one asset: status, fields, lifecycle controls, history."""
+    return _render_asset_detail(request, store, _require_asset(store, asset_id))
+
+
+@app.post("/assets/{asset_id}")
+def edit_asset(
+    request: Request,
+    asset_id: int,
+    store: AssetStoreDep,
+    name: Annotated[str, Form()] = "",
+    asset_type: Annotated[str, Form()] = "",
+    manufacturer: Annotated[str, Form()] = "",
+    model: Annotated[str, Form()] = "",
+    serial: Annotated[str, Form()] = "",
+    location: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+) -> Response:
+    """Edit catalogue fields. **Cannot change status or assignment** — those
+    move only through the lifecycle controls, which write a ledger row."""
+    asset = _require_asset(store, asset_id)
+    submitted = {
+        "name": name,
+        "asset_type": asset_type,
+        "manufacturer": manufacturer,
+        "model": model,
+        "serial": serial,
+        "location": location,
+        "notes": notes,
+    }
+    try:
+        store.update_asset(
+            asset.id,
+            name=name,
+            asset_type=asset_type,
+            manufacturer=manufacturer,
+            model=model,
+            serial=serial,
+            location=location,
+            notes=notes,
+        )
+    except ValueError as exc:
+        return _render_asset_detail(
+            request, store, asset, values=submitted, error=str(exc), status_code=400
+        )
+
+    flash(request, "Saved")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/assign")
+def assign_asset(
+    request: Request,
+    asset_id: int,
+    store: AssetStoreDep,
+    engagement_ref: Annotated[str, Form()] = "",
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    """Send an available asset out on an engagement."""
+    asset = _require_asset(store, asset_id)
+    try:
+        updated = store.assign(asset.id, engagement_ref, note=note)
+    except ValueError as exc:
+        return _render_asset_detail(request, store, asset, error=str(exc), status_code=400)
+    flash(request, f"Assigned {updated.name} to {updated.assigned_ref}")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/return")
+def return_asset_route(
+    request: Request,
+    asset_id: int,
+    store: AssetStoreDep,
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    """Take an assigned asset back."""
+    asset = _require_asset(store, asset_id)
+    try:
+        updated = store.return_asset(asset.id, note=note)
+    except ValueError as exc:
+        return _render_asset_detail(request, store, asset, error=str(exc), status_code=400)
+    flash(request, f"{updated.name} returned — now available")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/repair-out")
+def send_asset_for_repair(
+    request: Request,
+    asset_id: int,
+    store: AssetStoreDep,
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    asset = _require_asset(store, asset_id)
+    try:
+        store.send_for_repair(asset.id, note=note)
+    except ValueError as exc:
+        return _render_asset_detail(request, store, asset, error=str(exc), status_code=400)
+    flash(request, f"{asset.name} sent for repair")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/repair-in")
+def return_asset_from_repair(
+    request: Request,
+    asset_id: int,
+    store: AssetStoreDep,
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    asset = _require_asset(store, asset_id)
+    try:
+        store.return_from_repair(asset.id, note=note)
+    except ValueError as exc:
+        return _render_asset_detail(request, store, asset, error=str(exc), status_code=400)
+    flash(request, f"{asset.name} is back from repair")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/retire")
+def retire_asset_route(request: Request, asset_id: int, store: AssetStoreDep) -> Response:
+    """Retire an asset you no longer use — history kept, reversible."""
+    asset = _require_asset(store, asset_id)
+    store.retire_asset(asset.id)
+    flash(request, f"Retired {asset.name} — history kept")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/unretire")
+def unretire_asset_route(request: Request, asset_id: int, store: AssetStoreDep) -> Response:
+    asset = _require_asset(store, asset_id)
+    store.unretire_asset(asset.id)
+    flash(request, f"{asset.name} is back in service")
+    return RedirectResponse(url=f"/assets/{asset.id}", status_code=303)
+
+
+@app.post("/assets/{asset_id}/delete")
+def delete_asset_route(request: Request, asset_id: int, store: AssetStoreDep) -> Response:
+    """Hard-delete a mis-add. Refused (400, page intact) once the asset has ever
+    been assigned — that's engagement history; retire instead."""
+    asset = _require_asset(store, asset_id)
+    try:
+        store.delete_asset(asset.id)
+    except ValueError as exc:
+        return _render_asset_detail(request, store, asset, error=str(exc), status_code=400)
+    flash(request, f"Deleted {asset.name}")
+    return RedirectResponse(url="/assets", status_code=303)

@@ -157,6 +157,11 @@
       tr.status-low td:first-child { box-shadow: inset 4px 0 0 var(--low); }
       tr.status-out td:first-child { box-shadow: inset 4px 0 0 var(--out); }
       .badge.retired-badge { background: var(--surface-2); color: var(--muted); }
+      /* asset lifecycle badges — available green, assigned blue, repair amber, retired muted */
+      .badge.asset-available { background: var(--ok-bg); color: var(--ok); }
+      .badge.asset-assigned { background: rgba(28,79,143,.12); color: var(--accent); }
+      .badge.asset-out_for_repair { background: var(--low-bg); color: var(--low); }
+      .badge.asset-retired { background: var(--surface-2); color: var(--muted); }
       .chip { display: inline-block; padding: 0.02rem var(--sp-2); border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: var(--fs-0); white-space: nowrap; vertical-align: middle; background: var(--surface); }
       tr.retired { opacity: 0.55; }
       table.activity td.when { white-space: nowrap; font-size: var(--fs-1); }
@@ -276,6 +281,7 @@
           <nav class="tabs" aria-label="Main">
             <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Catalogue</a>
             <a href="/order" {% if request.url.path == "/order" %}aria-current="page"{% endif %}>To order{% if low_count %} <span class="count-badge">{{ low_count }}</span>{% endif %}</a>
+            <a href="/assets" {% if request.url.path.startswith("/assets") %}aria-current="page"{% endif %}>Assets</a>
             <a href="/activity" {% if request.url.path == "/activity" %}aria-current="page"{% endif %}>Activity</a>
             <a href="/parts/new" {% if request.url.path == "/parts/new" %}aria-current="page"{% endif %}>Add part</a>
           </nav>

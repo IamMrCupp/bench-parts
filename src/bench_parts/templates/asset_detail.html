@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}{{ asset.name }} — bench-parts{% endblock %}
+{% block heading %}{{ asset.name }}{% endblock %}
+
+{% block content %}
+  <p class="status-line">
+    <span class="badge asset-{{ asset.status.value }}">{{ asset.status.label }}</span>
+    {% if asset.assigned %}<span class="muted">on {{ asset.assigned_ref }}</span>{% endif %}
+  </p>
+
+  {% if asset.retired %}
+    <p class="notice">
+      <strong>Retired</strong> — hidden from the registry. History is kept; unretire to bring it back.
+      <form method="post" action="/assets/{{ asset.id }}/unretire" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="secondary">Unretire</button>
+      </form>
+    </p>
+  {% endif %}
+
+  <dl>
+    <dt>Type</dt><dd>{{ asset.asset_type.label }}</dd>
+    {% if asset.manufacturer %}<dt>Manufacturer</dt><dd>{{ asset.manufacturer }}</dd>{% endif %}
+    {% if asset.model %}<dt>Model</dt><dd>{{ asset.model }}</dd>{% endif %}
+    {% if asset.serial %}<dt>Serial</dt><dd>{{ asset.serial }}</dd>{% endif %}
+    {% if asset.location %}<dt>Location</dt><dd>{{ asset.location }}</dd>{% endif %}
+    {% if asset.assigned_ref %}<dt>Assigned to</dt><dd><span class="chip">{{ asset.assigned_ref }}</span></dd>{% endif %}
+    {% if asset.notes %}<dt>Notes</dt><dd class="address">{{ asset.notes }}</dd>{% endif %}
+  </dl>
+
+  {% if error %}
+    <p class="error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  {% if not asset.retired %}
+    <h2>Lifecycle</h2>
+    <div class="stock-controls">
+      {% if asset.available %}
+        <form method="post" action="/assets/{{ asset.id }}/assign" class="stock-control">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="engagement_ref">Assign</label>
+          <input id="engagement_ref" name="engagement_ref" placeholder="engagement ref, e.g. R26-0004"
+                 autocapitalize="characters" autocorrect="off" spellcheck="false" />
+          <button type="submit">Assign</button>
+        </form>
+        <form method="post" action="/assets/{{ asset.id }}/repair-out" class="stock-control">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="repair-note">Repair</label>
+          <input id="repair-note" name="note" placeholder="what's wrong (optional)" />
+          <button type="submit" class="secondary">Send for repair</button>
+        </form>
+      {% elif asset.assigned %}
+        <form method="post" action="/assets/{{ asset.id }}/return" class="stock-control">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="return-note">Return</label>
+          <input id="return-note" name="note" placeholder="note (optional)" />
+          <button type="submit">Return — back on the shelf</button>
+        </form>
+        <form method="post" action="/assets/{{ asset.id }}/repair-out" class="stock-control">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="repair-note">Repair</label>
+          <input id="repair-note" name="note" placeholder="broke mid-engagement (optional)" />
+          <button type="submit" class="secondary">Send for repair</button>
+        </form>
+      {% elif asset.out_for_repair %}
+        <form method="post" action="/assets/{{ asset.id }}/repair-in" class="stock-control">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="repair-in-note">Back</label>
+          <input id="repair-in-note" name="note" placeholder="note (optional)" />
+          <button type="submit">Back from repair</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <h2>History</h2>
+  {% if movements %}
+    <table class="activity">
+      <thead><tr><th>When</th><th>What</th><th>Engagement</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for m in movements | reverse %}
+          <tr>
+            <td class="when muted">{{ m.created_at[:16].replace("T", " ") }}</td>
+            <td>{{ m.action.label }}</td>
+            <td>{{ m.engagement_ref or "" }}</td>
+            <td>{{ m.note or "" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No lifecycle events yet.</p>
+  {% endif %}
+
+  <h2>Edit</h2>
+  <form method="post" action="/assets/{{ asset.id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    {% include "_asset_fields.html" %}
+    <button type="submit">Save changes</button>
+  </form>
+
+  {% if not asset.retired or deletable %}
+  <h2>Remove</h2>
+  <div class="danger">
+    {% if not asset.retired %}
+      <form method="post" action="/assets/{{ asset.id }}/retire"
+            data-confirm="Retire this asset? It disappears from the registry, but every lifecycle event is kept. You can unretire it later.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="secondary">Retire — no longer in service</button>
+      </form>
+    {% endif %}
+    {% if deletable %}
+      <form method="post" action="/assets/{{ asset.id }}/delete"
+            data-confirm="Delete this asset for good? Only possible because it was never assigned. This cannot be undone.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="destructive">Delete — it was a mistake</button>
+      </form>
+      <p class="hint">Delete is for mis-adds. Once an asset has been assigned to an engagement, only Retire is offered — the custody history has to stay.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <p class="timestamps">Added {{ asset.created_at[:10] }} · updated {{ asset.updated_at[:10] }}</p>
+{% endblock %}
