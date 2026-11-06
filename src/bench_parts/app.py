@@ -28,7 +28,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from bench_parts import api, auth
+from bench_parts import api, asset_api, auth
+from bench_parts.asset_store import AssetStore
 from bench_parts.auth import verify_password
 from bench_parts.db import connect
 from bench_parts.forms import (
@@ -357,9 +358,24 @@ def get_store() -> Iterator[PartStore]:
 
 StoreDep = Annotated[PartStore, Depends(get_store)]
 
-# The JSON API. Auth for it lives in `require_session` above (bearer-or-session,
-# 401 JSON); the router itself only knows about parts.
+
+def get_asset_store() -> Iterator[AssetStore]:
+    """An asset store for one request.
+
+    A fresh connection per request, same as :func:`get_store` and for the same
+    reasons (threadpool-safe SQLite, single-writer deployment). ``initialise()``
+    short-circuits on an up-to-date ``user_version``, so the asset tables are
+    always present regardless of how the app was started.
+    """
+    with connect(get_db_path()) as conn:
+        initialise(conn)
+        yield AssetStore(conn)
+
+
+# The JSON API. Auth for both routers lives in `require_session` above
+# (bearer-or-session, 401 JSON); the routers themselves only know their domain.
 app.include_router(api.build_router(get_store))
+app.include_router(asset_api.build_asset_router(get_asset_store))
 
 
 @app.get("/healthz")
