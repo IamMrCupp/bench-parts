@@ -23,6 +23,11 @@ jobs:
       - id: release
         uses: googleapis/release-please-action@v5
         with:
+          # The shared RELEASE_PLEASE_PAT (the "release-please-cascade" token, as in
+          # bench-recon and mrcupp-project) makes release PRs trigger CI; PRs opened
+          # with the built-in GITHUB_TOKEN never trigger workflows. Falls back to
+          # github.token until the secret is set.
+          token: ${{ secrets.RELEASE_PLEASE_PAT || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
