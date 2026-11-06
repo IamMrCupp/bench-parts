@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Assets — bench-parts{% endblock %}
+{% block heading %}Assets{% endblock %}
+
+{% block content %}
+  <form method="get" action="/assets" class="filters" role="search">
+    <select name="asset_type" aria-label="Type">
+      <option value="">All types</option>
+      {% for t in asset_types %}
+        <option value="{{ t.value }}" {% if t.value == asset_type %}selected{% endif %}>{{ t.label }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" aria-label="Status">
+      <option value="">Any status</option>
+      {% for s in statuses %}
+        <option value="{{ s.value }}" {% if s.value == status %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    {% if engagement_refs %}
+    <select name="assigned_ref" aria-label="Engagement">
+      <option value="">Any engagement</option>
+      {% for ref in engagement_refs %}
+        <option value="{{ ref }}" {% if ref|lower == assigned_ref|lower and assigned_ref %}selected{% endif %}>{{ ref }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <button type="submit">Filter</button>
+  </form>
+
+  <p class="muted"><a href="/assets/new" class="chip">add an asset</a></p>
+
+  {% if retired_count %}
+    <p class="muted"><a href="/assets?show_retired=1{% if asset_type %}&asset_type={{ asset_type }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Show {{ retired_count }} retired asset{{ "s" if retired_count != 1 else "" }}</a></p>
+  {% elif show_retired %}
+    <p class="muted">Showing retired assets too. <a href="/assets">Hide them</a>.</p>
+  {% endif %}
+
+  {% if assets %}
+    <table class="parts assets">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Location</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asset in assets %}
+          <tr class="asset-row-{{ asset.status.value }}{% if asset.retired %} retired{% endif %}">
+            <td class="mpn"><a href="/assets/{{ asset.id }}">{{ asset.name }}</a></td>
+            <td class="desc">
+              {{ asset.asset_type.label }}
+              {% if asset.assigned %}<span class="chip">→ {{ asset.assigned_ref }}</span>{% endif %}
+            </td>
+            <td class="loc">{{ asset.location or "" }}</td>
+            <td class="stock">
+              <span class="badge asset-{{ asset.status.value }}">{{ asset.status.label }}</span>
+              {% if asset.assigned %}<span class="muted">{{ asset.assigned_ref }}</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">
+      {% if asset_type or status or assigned_ref %}
+        No assets match. <a href="/assets">Clear the filters</a> or <a href="/assets/new">add one</a>.
+      {% else %}
+        No assets yet — <a href="/assets/new">add the first one</a>.
+      {% endif %}
+    </p>
+  {% endif %}
+{% endblock %}

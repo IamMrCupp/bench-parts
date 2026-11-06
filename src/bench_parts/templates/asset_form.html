@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Add asset — bench-parts{% endblock %}
+{% block heading %}Add an asset{% endblock %}
+
+{% block content %}
+  {% if error %}
+    <p class="error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/assets">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    {% include "_asset_fields.html" %}
+    <p class="hint">New gear starts <strong>available</strong>. Assign it to an engagement from its page.</p>
+    <button type="submit">Add asset</button>
+  </form>
+{% endblock %}
