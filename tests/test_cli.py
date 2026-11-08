@@ -151,3 +151,73 @@ def test_serve_warns_when_shared_on_the_lan(tmp_path, capsys) -> None:
 def test_paths_names_the_settings_file(tmp_path, capsys) -> None:
     assert cli.main(["--data-dir", str(tmp_path), "paths"]) == 0
     assert str(tmp_path / "settings.env") in capsys.readouterr().out
+
+
+# --- non-interactive, for bench-setup (#120) -------------------------------------
+
+
+def _stdin(monkeypatch, text: str) -> None:
+    import io
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO(text))
+
+
+def test_set_password_stdin_reads_once_without_a_confirm(tmp_path, monkeypatch, capsys) -> None:
+    _stdin(monkeypatch, "shared pw\n")
+    asked = []
+    code = cli.cmd_set_password(_args(tmp_path, "set-password", "--stdin"), asked.append)
+    assert code == 0
+    assert asked == []  # never prompts
+    stored = settings.read_settings(tmp_path / "settings.env")[auth.ENV_VAR]
+    assert auth.verify_password("shared pw", stored)
+    assert capsys.readouterr().out == ""
+
+
+def test_set_password_stdin_keeps_inner_spaces_and_drops_only_the_newline(
+    tmp_path, monkeypatch
+) -> None:
+    _stdin(monkeypatch, " two words \r\n")
+    assert cli.main(["--data-dir", str(tmp_path), "set-password", "--stdin"]) == 0
+    stored = settings.read_settings(tmp_path / "settings.env")[auth.ENV_VAR]
+    assert auth.verify_password(" two words ", stored)
+
+
+@pytest.mark.parametrize("text", ["", "\n", "   \n"])
+def test_set_password_stdin_refuses_a_blank(tmp_path, monkeypatch, capsys, text) -> None:
+    _stdin(monkeypatch, text)
+    assert cli.main(["--data-dir", str(tmp_path), "set-password", "--stdin"]) == 1
+    assert "blank" in capsys.readouterr().err
+    assert not (tmp_path / "settings.env").exists()
+
+
+def test_set_password_generate_prints_only_the_password_once(tmp_path, capsys) -> None:
+    assert cli.main(["--data-dir", str(tmp_path), "set-password", "--generate"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("\n") == 1
+    password = out.strip()
+    assert len(password) >= 20
+    stored = settings.read_settings(tmp_path / "settings.env")[auth.ENV_VAR]
+    assert auth.verify_password(password, stored)
+    assert password not in (tmp_path / "settings.env").read_text()
+
+
+def test_set_password_generate_is_random(tmp_path, capsys) -> None:
+    cli.main(["--data-dir", str(tmp_path / "a"), "set-password", "--generate"])
+    cli.main(["--data-dir", str(tmp_path / "b"), "set-password", "--generate"])
+    first, second = capsys.readouterr().out.split()
+    assert first != second
+
+
+def test_set_password_flags_dont_mix(tmp_path) -> None:
+    with pytest.raises(SystemExit):
+        _args(tmp_path, "set-password", "--stdin", "--generate")
+
+
+def test_new_token_print_writes_only_the_token(tmp_path, capsys) -> None:
+    assert cli.main(["--data-dir", str(tmp_path), "new-token", "--print"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out.count("\n") == 1
+    token = captured.out.strip()
+    assert len(token) >= 40
+    assert captured.err == ""
+    assert settings.read_settings(tmp_path / "settings.env")[auth.API_TOKEN_ENV_VAR] == token
