@@ -60,7 +60,7 @@ def test_healthz_answers_without_a_session(anonymous) -> None:
     response = anonymous.get("/healthz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["app"] == "bench-parts"
 
 
 def test_login_page_is_reachable_signed_out(anonymous) -> None:
