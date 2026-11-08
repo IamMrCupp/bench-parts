@@ -1,6 +1,7 @@
 """The ``bench-parts`` command: run it, and set it up, without a cluster.
 
     bench-parts set-password     # once: the login password (required)
+    bench-parts set-password --stdin | --generate   # the same, without a prompt
     bench-parts new-token        # the API token benchhud (and scripts) use
     bench-parts serve            # http://127.0.0.1:8000/
     bench-parts paths            # where the data and settings live
@@ -59,16 +60,32 @@ def cmd_serve(args: argparse.Namespace, run: Callable[..., None] | None = None) 
 
 
 def cmd_set_password(args: argparse.Namespace, ask: Callable[[str], str] = getpass.getpass) -> int:
-    password = ask("New bench-parts password: ")
-    if password != ask("Again: "):
-        print("The passwords didn't match.", file=sys.stderr)
-        return 1
+    # --stdin and --generate are for bench-setup: no prompts, and the password
+    # never goes through argv. Their status line goes to stderr, so stdout holds
+    # nothing (--stdin) or only the generated password (--generate).
+    generated = False
+    if args.generate:
+        password = secrets.token_urlsafe(18)
+        generated = True
+    elif args.stdin:
+        password = sys.stdin.readline().rstrip("\r\n")
+    else:
+        password = ask("New bench-parts password: ")
+        if password != ask("Again: "):
+            print("The passwords didn't match.", file=sys.stderr)
+            return 1
     if not password.strip():
         print("The password can't be blank.", file=sys.stderr)
         return 1
     path = settings.settings_path(_data(args))
     settings.write_setting(path, auth.ENV_VAR, auth.hash_password(password))
-    print(f"Saved to {path}. Restart bench-parts if it's running.")
+    saved = f"Saved to {path}. Restart bench-parts if it's running."
+    if generated:
+        print(password)
+    if generated or args.stdin:
+        print(saved, file=sys.stderr)
+    else:
+        print(saved)
     return 0
 
 
@@ -77,6 +94,8 @@ def cmd_new_token(args: argparse.Namespace) -> int:
     path = settings.settings_path(_data(args))
     settings.write_setting(path, auth.API_TOKEN_ENV_VAR, token)
     print(token)
+    if args.print_only:
+        return 0  # bench-setup reads stdout; nothing else on either stream
     print(
         f"Saved to {path}. Paste it into benchhud: Preferences → Inventory → Token "
         "(and BENCH_PARTS_API_TOKEN for bench-parts-label). The old token, if any, "
@@ -121,12 +140,21 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to share on the LAN")
     serve.add_argument("--port", type=int, default=8000)
     serve.set_defaults(func=cmd_serve)
-    sub.add_parser("set-password", help="set the login password").set_defaults(
-        func=cmd_set_password
+    set_password = sub.add_parser("set-password", help="set the login password")
+    how = set_password.add_mutually_exclusive_group()
+    how.add_argument(
+        "--stdin", action="store_true", help="read it once from stdin, no prompt or confirm"
     )
-    sub.add_parser("new-token", help="make the API token benchhud and scripts use").set_defaults(
-        func=cmd_new_token
+    how.add_argument("--generate", action="store_true", help="make a random one and print it once")
+    set_password.set_defaults(func=cmd_set_password)
+    new_token = sub.add_parser("new-token", help="make the API token benchhud and scripts use")
+    new_token.add_argument(
+        "--print",
+        dest="print_only",
+        action="store_true",
+        help="print only the token on stdout, nothing else (for scripts)",
     )
+    new_token.set_defaults(func=cmd_new_token)
     sub.add_parser("paths", help="show where data and settings live").set_defaults(func=cmd_paths)
     sub.add_parser("tray", help="run as a menu-bar / tray app").set_defaults(func=cmd_tray)
     return parser
