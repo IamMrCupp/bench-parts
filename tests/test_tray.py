@@ -202,7 +202,7 @@ def test_first_run_sets_a_password_then_serves(qtbot, tmp_path, env) -> None:
     stored = settings.read_settings(tmp_path / "settings.env")[auth.ENV_VAR]
     assert auth.verify_password("bench pw", stored)
     assert env[auth.ENV_VAR] == stored  # the running app sees it without a restart
-    assert tray.controller.starts == [("127.0.0.1", 8000)]
+    assert tray.controller.starts == [("127.0.0.1", 8402)]
     assert tray.status_action.text().startswith("Running on this computer only")
 
 
@@ -218,7 +218,7 @@ def test_sharing_on_the_lan_restarts_on_all_interfaces(qtbot, tmp_path, env) -> 
     tray = _tray(qtbot, tmp_path, password="pw")
     tray.start()
     tray.share_action.setChecked(True)
-    assert tray.controller.starts[-1] == ("0.0.0.0", 8000)
+    assert tray.controller.starts[-1] == ("0.0.0.0", 8402)
     assert settings.read_settings(tmp_path / "settings.env")["BENCH_PARTS_HOST"] == "0.0.0.0"
     assert "on your LAN" in tray.status_action.text()
 
@@ -263,3 +263,11 @@ def test_password_dialog_needs_two_matching_entries(qtbot) -> None:
     assert not ok.isEnabled()
     dialog.second.setText("abc")
     assert ok.isEnabled() and dialog.password == "abc"
+
+
+def test_a_port_in_the_settings_still_wins(qtbot, tmp_path, env) -> None:
+    """8402 is only the default (#122): an install pinned to 8000 keeps it."""
+    env["BENCH_PARTS_PORT"] = "8000"
+    tray = _tray(qtbot, tmp_path, password="pw")
+    tray.start()
+    assert tray.controller.starts == [("127.0.0.1", 8000)]

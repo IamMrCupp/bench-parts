@@ -76,7 +76,7 @@ CI builds it for `amd64` and `arm64` on every PR (`bench-parts-deb-amd64`,
 sudo apt install ./bench-parts_<version>_amd64.deb
 sudo bench-parts set-password     # it won't start without one
 sudo bench-parts new-token        # for benchhud and scripts
-sudo systemctl start bench-parts  # http://127.0.0.1:8000/
+sudo systemctl start bench-parts  # http://127.0.0.1:8402/
 ```
 
 - It runs as its own `bench-parts` system user, with its data in
@@ -88,7 +88,10 @@ sudo systemctl start bench-parts  # http://127.0.0.1:8000/
   so it can't quietly loosen.
 - `settings.env` there stays **root-only**. systemd reads it and passes the
   password and token in, so the service user never can.
-- It listens on loopback. For a tablet or benchhud on another machine, add
+- It listens on loopback, port 8402. An install upgraded from before 8402
+  stays on 8000: the upgrade writes `BENCH_PARTS_PORT=8000` into
+  `settings.env` if no port is set there. Change or delete that line to move.
+- For a tablet or benchhud on another machine, add
   `BENCH_PARTS_HOST=0.0.0.0` to
   `settings.env` and `sudo systemctl restart bench-parts`.
 - With no password it fails once and stays stopped, rather than restarting in
@@ -161,7 +164,7 @@ With Docker Compose (or `podman compose`), using the `compose.yaml` here:
 ```bash
 docker compose run --rm parts bench-parts set-password   # once
 docker compose run --rm parts bench-parts new-token      # for benchhud and scripts
-docker compose up -d                                     # http://127.0.0.1:8000/
+docker compose up -d                                     # http://127.0.0.1:8402/
 ```
 
 The data folder in the image is `/data` (`BENCH_PARTS_DATA_DIR`); compose

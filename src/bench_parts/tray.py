@@ -55,6 +55,8 @@ from bench_parts.server import ServerController
 
 HOST_ENV = "BENCH_PARTS_HOST"
 PORT_ENV = "BENCH_PARTS_PORT"
+#: bench-suite's port for bench-parts (intake 8401, recon 8403), so they share a host.
+DEFAULT_PORT = 8402
 SMOKE_ENV = "BENCH_PARTS_TRAY_SMOKE"
 _LOOPBACK = "127.0.0.1"
 _LAN = "0.0.0.0"
@@ -202,9 +204,9 @@ class PartsTray:
     @property
     def port(self) -> int:
         try:
-            return int(os.environ.get(PORT_ENV, "8000"))
+            return int(os.environ.get(PORT_ENV, str(DEFAULT_PORT)))
         except ValueError:
-            return 8000
+            return DEFAULT_PORT
 
     def _save(self, key: str, value: str) -> None:
         # The running app reads these from the environment on each request, so
