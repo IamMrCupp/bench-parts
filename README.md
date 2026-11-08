@@ -109,7 +109,7 @@ No cluster needed. Install the command with [uv](https://docs.astral.sh/uv/)
 uv tool install git+https://github.com/IamMrCupp/bench-parts
 bench-parts set-password     # required: it won't serve without one
 bench-parts new-token        # the API token for benchhud's Inventory tab and scripts
-bench-parts serve            # http://127.0.0.1:8000/
+bench-parts serve            # http://127.0.0.1:8402/
 ```
 
 `serve` stays on this machine by default. `--host 0.0.0.0` shares it on the LAN

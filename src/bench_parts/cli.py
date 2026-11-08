@@ -2,7 +2,7 @@
 
     bench-parts set-password     # once: the login password (required)
     bench-parts new-token        # the API token benchhud (and scripts) use
-    bench-parts serve            # http://127.0.0.1:8000/
+    bench-parts serve            # http://127.0.0.1:8402/
     bench-parts paths            # where the data and settings live
 
 Everything lands in the per-OS data folder (see :mod:`bench_parts.settings`), and
@@ -23,6 +23,10 @@ from bench_parts import auth, settings
 
 #: Addresses that keep the server on this machine.
 _LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+#: bench-suite's port for bench-parts (intake 8401, recon 8403), so they share a
+#: host. The container still listens on 8000: its CMD passes --port.
+DEFAULT_PORT = 8402
 
 
 def _data(args: argparse.Namespace) -> Path:
@@ -119,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve", help="run the web app")
     serve.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to share on the LAN")
-    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--port", type=int, default=DEFAULT_PORT)
     serve.set_defaults(func=cmd_serve)
     sub.add_parser("set-password", help="set the login password").set_defaults(
         func=cmd_set_password

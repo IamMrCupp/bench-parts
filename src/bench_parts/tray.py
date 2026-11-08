@@ -51,12 +51,11 @@ from PySide6.QtWidgets import (
 
 from bench_parts import __version__, auth, settings
 from bench_parts.autostart import Autostart
+from bench_parts.cli import DEFAULT_PORT
 from bench_parts.server import ServerController
 
 HOST_ENV = "BENCH_PARTS_HOST"
 PORT_ENV = "BENCH_PARTS_PORT"
-#: bench-suite's port for bench-parts (intake 8401, recon 8403), so they share a host.
-DEFAULT_PORT = 8402
 SMOKE_ENV = "BENCH_PARTS_TRAY_SMOKE"
 _LOOPBACK = "127.0.0.1"
 _LAN = "0.0.0.0"
