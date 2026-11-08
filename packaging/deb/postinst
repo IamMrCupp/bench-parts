@@ -8,18 +8,28 @@ if [ "$1" = "configure" ]; then
     fi
     install -d -o bench-parts -g bench-parts -m 0750 /var/lib/bench-parts
 
-    # Upgrading from before the default moved from 8000 to 8402: keep a set-up
-    # install on 8000, so benchhud and bookmarks still reach it. Only when the
-    # owner hasn't chosen a port. A fresh install, or one never set up (no
-    # settings.env), gets 8402.
+    # Every install records its port in settings.env, so the 8000 to 8402 move
+    # can tell a set-up install from before 8402 (a settings file with no port
+    # line) from a newer one. Only ever adds a line, and only when the owner
+    # hasn't set a port.
     settings=/var/lib/bench-parts/settings.env
-    if [ -n "$2" ] && [ -f "$settings" ] \
-        && ! grep -q '^[[:space:]]*BENCH_PARTS_PORT=' "$settings"; then
+    if [ ! -f "$settings" ]; then
+        # Fresh, or never set up (so nothing points at 8000 yet): 8402.
+        # Root-only, like `bench-parts set-password` writes it.
+        (umask 077 && echo "BENCH_PARTS_PORT=8402" > "$settings")
+        chown root:root "$settings"
+        chmod 0600 "$settings"
+    elif ! grep -q '^[[:space:]]*BENCH_PARTS_PORT=' "$settings"; then
+        # An upgrade of a set-up install from before 8402: keep it on 8000,
+        # where benchhud and bookmarks already point. (A fresh install with a
+        # leftover file from a removed one gets 8402.)
+        port=8000
+        [ -z "$2" ] && port=8402
         # Don't glue the new line onto a last line without a newline.
         if [ -s "$settings" ] && [ -n "$(tail -c 1 "$settings")" ]; then
             echo >> "$settings"
         fi
-        echo "BENCH_PARTS_PORT=8000" >> "$settings"
+        echo "BENCH_PARTS_PORT=$port" >> "$settings"
     fi
 fi
 

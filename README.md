@@ -88,9 +88,10 @@ sudo systemctl start bench-parts  # http://127.0.0.1:8402/
   so it can't quietly loosen.
 - `settings.env` there stays **root-only**. systemd reads it and passes the
   password and token in, so the service user never can.
-- It listens on loopback, port 8402. An install upgraded from before 8402
-  stays on 8000: the upgrade writes `BENCH_PARTS_PORT=8000` into
-  `settings.env` if no port is set there. Change or delete that line to move.
+- It listens on loopback, port 8402, recorded as `BENCH_PARTS_PORT` in
+  `settings.env` at install. A set-up install upgraded from before 8402 stays
+  on 8000: the upgrade writes `BENCH_PARTS_PORT=8000` there. Edit that line to
+  move it.
 - For a tablet or benchhud on another machine, add
   `BENCH_PARTS_HOST=0.0.0.0` to
   `settings.env` and `sudo systemctl restart bench-parts`.
