@@ -28,7 +28,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from bench_parts import api, asset_api, auth
+from bench_parts import __version__, api, asset_api, auth
 from bench_parts.asset_store import Asset, AssetStore
 from bench_parts.auth import verify_password
 from bench_parts.db import connect
@@ -388,8 +388,12 @@ def healthz() -> dict[str, str]:
     Kubernetes hits, and it must answer before a session exists. It is the one
     documented exception to "all routes protected", so it must never return
     anything about stock or a job.
+
+    ``app`` and ``version`` say *what* is answering, so ``bench-setup doctor``
+    can tell bench-parts on its port from something else there. Neither is
+    secret, and the probes only look at the status code.
     """
-    return {"status": "ok"}
+    return {"status": "ok", "app": "bench-parts", "version": __version__}
 
 
 def _safe_next(target: str) -> str:

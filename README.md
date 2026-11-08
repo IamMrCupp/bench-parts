@@ -116,6 +116,13 @@ bench-parts serve            # http://127.0.0.1:8402/
 so a tablet (or benchhud on another machine) can reach it. Keep it off public
 networks.
 
+For scripts (bench-suite's `bench-setup` uses these), nothing prompts and no
+secret goes on the command line:
+
+- `set-password --stdin` reads the password once from stdin, with no confirm.
+- `set-password --generate` makes a random one and prints it once.
+- `new-token --print` prints only the token on stdout.
+
 Everything lives in one per-user folder. `bench-parts paths` shows it:
 
 | OS | Data folder |
