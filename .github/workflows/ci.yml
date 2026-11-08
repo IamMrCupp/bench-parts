@@ -283,6 +283,9 @@ jobs:
             id bench-parts
             test "$(stat -c %U:%a /var/lib/bench-parts)" = "bench-parts:750"
             test "$(systemctl is-enabled bench-parts)" = enabled
+            # A fresh install records its port, root-only, before any password.
+            test "$(stat -c %U:%a /var/lib/bench-parts/settings.env)" = "root:600"
+            grep -qx "BENCH_PARTS_PORT=8402" /var/lib/bench-parts/settings.env
             bench-parts paths | grep -q "/var/lib/bench-parts/settings.env"
           '
 
@@ -302,7 +305,10 @@ jobs:
             test "$(stat -c %U:%a /var/lib/bench-parts/settings.env)" = "root:600"
             systemctl reset-failed bench-parts
             systemctl start bench-parts
-            for _ in $(seq 30); do curl -fsS http://127.0.0.1:8000/healthz && break; sleep 1; done
+            # set-password kept the fresh install's port: bench-suite's, not 8000.
+            grep -qx "BENCH_PARTS_PORT=8402" /var/lib/bench-parts/settings.env
+            for _ in $(seq 30); do curl -fsS http://127.0.0.1:8402/healthz && break; sleep 1; done
+            curl -fsS http://127.0.0.1:8402/healthz >/dev/null
             echo
             pid=$(systemctl show -p MainPID --value bench-parts)
             test "$(stat -c %U /proc/$pid)" = bench-parts
@@ -314,3 +320,35 @@ jobs:
           score=$(docker exec sd systemd-analyze security bench-parts --no-pager | tail -1 | grep -oE '[0-9]+[.][0-9]+' | head -1)
           echo "exposure score: $score (max allowed: 4.0)"
           awk -v s="$score" 'BEGIN { exit !(s <= 4.0) }'
+
+      - name: An upgrade leaves an 8402 install on 8402
+        run: |
+          # Fresh install, then set-password (above), then dpkg's upgrade call
+          # (configure <old-version>): it must not be pinned back to 8000.
+          docker exec sd sh -ec '
+            /var/lib/dpkg/info/bench-parts.postinst configure "$(dpkg-query -W -f="\${Version}" bench-parts)"
+            test "$(grep -c "^BENCH_PARTS_PORT=" /var/lib/bench-parts/settings.env)" = 1
+            grep -qx "BENCH_PARTS_PORT=8402" /var/lib/bench-parts/settings.env
+            for _ in $(seq 30); do curl -fsS http://127.0.0.1:8402/healthz && break; sleep 1; done
+            echo
+            curl -fsS http://127.0.0.1:8402/healthz >/dev/null
+          ' || { docker exec sd journalctl -u bench-parts --no-pager | tail -30; exit 1; }
+
+      - name: An upgrade keeps a set-up install from before 8402 on 8000
+        run: |
+          # Make it look like a set-up install from before 8402 (password, no
+          # port line), then replay dpkg's upgrade call. It must stay on 8000,
+          # where benchhud already points. Twice, so it can't append twice.
+          docker exec sd sh -ec '
+            sed -i "/^BENCH_PARTS_PORT=/d" /var/lib/bench-parts/settings.env
+            grep -q "^BENCH_PARTS_PASSWORD_HASH=" /var/lib/bench-parts/settings.env
+            /var/lib/dpkg/info/bench-parts.postinst configure 0.3.0
+            /var/lib/dpkg/info/bench-parts.postinst configure 0.3.0
+            test "$(grep -c "^BENCH_PARTS_PORT=" /var/lib/bench-parts/settings.env)" = 1
+            grep -qx "BENCH_PARTS_PORT=8000" /var/lib/bench-parts/settings.env
+            test "$(stat -c %U:%a /var/lib/bench-parts/settings.env)" = "root:600"
+            for _ in $(seq 30); do curl -fsS http://127.0.0.1:8000/healthz && break; sleep 1; done
+            echo
+            curl -fsS http://127.0.0.1:8000/healthz >/dev/null
+            if curl -fsS http://127.0.0.1:8402/healthz; then exit 1; fi
+          ' || { docker exec sd journalctl -u bench-parts --no-pager | tail -30; exit 1; }

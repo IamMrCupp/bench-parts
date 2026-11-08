@@ -7,6 +7,30 @@ if [ "$1" = "configure" ]; then
             --no-create-home --shell /usr/sbin/nologin bench-parts
     fi
     install -d -o bench-parts -g bench-parts -m 0750 /var/lib/bench-parts
+
+    # Every install records its port in settings.env, so the 8000 to 8402 move
+    # can tell a set-up install from before 8402 (a settings file with no port
+    # line) from a newer one. Only ever adds a line, and only when the owner
+    # hasn't set a port.
+    settings=/var/lib/bench-parts/settings.env
+    if [ ! -f "$settings" ]; then
+        # Fresh, or never set up (so nothing points at 8000 yet): 8402.
+        # Root-only, like `bench-parts set-password` writes it.
+        (umask 077 && echo "BENCH_PARTS_PORT=8402" > "$settings")
+        chown root:root "$settings"
+        chmod 0600 "$settings"
+    elif ! grep -q '^[[:space:]]*BENCH_PARTS_PORT=' "$settings"; then
+        # An upgrade of a set-up install from before 8402: keep it on 8000,
+        # where benchhud and bookmarks already point. (A fresh install with a
+        # leftover file from a removed one gets 8402.)
+        port=8000
+        [ -z "$2" ] && port=8402
+        # Don't glue the new line onto a last line without a newline.
+        if [ -s "$settings" ] && [ -n "$(tail -c 1 "$settings")" ]; then
+            echo >> "$settings"
+        fi
+        echo "BENCH_PARTS_PORT=$port" >> "$settings"
+    fi
 fi
 
 if [ -d /run/systemd/system ]; then
@@ -27,7 +51,7 @@ bench-parts is installed. Set a password, then start it:
     sudo bench-parts set-password
     sudo systemctl start bench-parts
 
-It listens on 127.0.0.1:8000. For a tablet, or benchhud on another machine,
+It listens on 127.0.0.1:8402. For a tablet, or benchhud on another machine,
 add BENCH_PARTS_HOST=0.0.0.0 to /var/lib/bench-parts/settings.env and restart
 it. Keep it off public networks.
 

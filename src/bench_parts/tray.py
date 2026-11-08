@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
 
 from bench_parts import __version__, auth, settings
 from bench_parts.autostart import Autostart
+from bench_parts.cli import DEFAULT_PORT
 from bench_parts.server import ServerController
 
 HOST_ENV = "BENCH_PARTS_HOST"
@@ -202,9 +203,9 @@ class PartsTray:
     @property
     def port(self) -> int:
         try:
-            return int(os.environ.get(PORT_ENV, "8000"))
+            return int(os.environ.get(PORT_ENV, str(DEFAULT_PORT)))
         except ValueError:
-            return 8000
+            return DEFAULT_PORT
 
     def _save(self, key: str, value: str) -> None:
         # The running app reads these from the environment on each request, so

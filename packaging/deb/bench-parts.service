@@ -14,7 +14,9 @@ StateDirectoryMode=0750
 Environment=BENCH_PARTS_DATA_DIR=/var/lib/bench-parts
 # Loopback unless settings.env says BENCH_PARTS_HOST=0.0.0.0 (a tablet on the LAN).
 Environment=BENCH_PARTS_HOST=127.0.0.1
-Environment=BENCH_PARTS_PORT=8000
+# 8402 so it shares a host with intake (8401) and recon (8403). An install
+# upgraded from before 8402 has BENCH_PARTS_PORT=8000 in settings.env.
+Environment=BENCH_PARTS_PORT=8402
 # The password hash and tokens, written by `sudo bench-parts set-password`.
 # systemd reads it as root; the file stays root-only. Values win over the lines
 # above.

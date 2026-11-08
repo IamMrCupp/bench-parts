@@ -2,7 +2,7 @@
 #
 #   docker compose run --rm parts bench-parts set-password   # once
 #   docker compose run --rm parts bench-parts new-token          # for benchhud and scripts
-#   docker compose up -d                                          # http://127.0.0.1:8000/
+#   docker compose up -d                                          # http://127.0.0.1:8402/
 #
 # The password and token land in settings.env inside the volume, read by the
 # app itself, so the $ in the password hash never meets Compose's interpolation.
@@ -12,9 +12,10 @@ services:
     # Pin a release (e.g. :0.3) rather than :latest for a deploy you don't babysit.
     image: ghcr.io/iammrcupp/bench-parts:latest
     ports:
-      # This machine only. For a tablet, or benchhud on another machine, use
-      # "8000:8000". Keep it off public networks.
-      - "127.0.0.1:8000:8000"
+      # This machine only, on 8402 (intake is 8401, recon 8403). Inside the
+      # container it's still 8000. For a tablet, or benchhud on another
+      # machine, use "8402:8000". Keep it off public networks.
+      - "127.0.0.1:8402:8000"
     volumes:
       - parts-data:/data
     restart: unless-stopped
