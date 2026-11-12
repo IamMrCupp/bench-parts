@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/IamMrCupp/bench-parts/compare/v0.3.0...v0.4.0) (2026-11-08)
+
+
+### Features
+
+* **app:** name the app and version on /healthz ([3916009](https://github.com/IamMrCupp/bench-parts/commit/3916009bda4286dd398d9760f80f11c6db948a1d))
+* **app:** name the app and version on /healthz ([5607ab2](https://github.com/IamMrCupp/bench-parts/commit/5607ab2effc09eab521eff0c62d48ce387e35740))
+* **cli:** add set-password --stdin/--generate and new-token --print ([ba96d77](https://github.com/IamMrCupp/bench-parts/commit/ba96d77716364e0d1fb9b779b6e2b8ecc916dc38))
+* **cli:** add set-password --stdin/--generate and new-token --print ([4e345e2](https://github.com/IamMrCupp/bench-parts/commit/4e345e2646c47def77c029f4b3dd34519d68df2f))
+* **cli:** serve defaults to port 8402 ([5683957](https://github.com/IamMrCupp/bench-parts/commit/56839573fd5becb339c14a74218dcddf7d86970c))
+* **packaging:** default host port 8402, keeping 8000 on upgraded installs ([c26cc0c](https://github.com/IamMrCupp/bench-parts/commit/c26cc0cee7e4133a4de7eb3ee629c1c99901ec9a))
+* **packaging:** default host port 8402, keeping 8000 on upgraded installs ([dd81527](https://github.com/IamMrCupp/bench-parts/commit/dd81527bb209b1b1d8caee2d9cca8d27d96ef862))
+
+
+### Bug Fixes
+
+* **deb:** record the port on install so upgrades don't pin new installs to 8000 ([130b6ea](https://github.com/IamMrCupp/bench-parts/commit/130b6ea27d4714662c28ac7f4547618f6b6e3bb0))
+
 ## [0.3.0](https://github.com/IamMrCupp/bench-parts/compare/v0.2.2...v0.3.0) (2026-11-06)
 
 
