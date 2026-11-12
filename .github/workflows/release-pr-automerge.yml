@@ -1,0 +1,72 @@
+name: release-pr-automerge
+
+# Merge release-please's release PR once every check on it passes, so a release
+# ships without a manual merge. Only release-please's own branch triggers this;
+# every other PR stays a manual merge.
+#
+# Not GitHub's auto-merge: that needs required checks on main, and CI's
+# paths-ignore never reports on docs-only PRs, so a rule like that would block
+# them for good.
+#
+# CI and Image both run on the release PR, so this wakes on either one and
+# merges only when nothing on the PR is still running or failed. Whichever
+# finishes last does the merge. workflow_run always runs this file as it is on
+# main, never a PR's copy.
+
+on:
+  workflow_run:
+    workflows: [CI, Image]
+    types: [completed]
+    branches: ["release-please--**"]
+
+permissions:
+  contents: read
+
+# CI and Image can finish together. One merge at a time; the second finds the
+# PR already merged and stops.
+concurrency:
+  group: release-pr-automerge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the release PR
+        env:
+          # The PAT, not github.token: a merge pushed with github.token
+          # triggers no workflows, so release-please would never cut the
+          # release.
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "RELEASE_PLEASE_PAT isn't set"; exit 1; fi
+          pr=$(gh pr list -R "$REPO" --head "$BRANCH" --base main --state open \
+                 --label "autorelease: pending" --json number,headRefOid \
+                 --jq ".[] | select(.headRefOid == \"$SHA\") | .number")
+          if [ -z "$pr" ]; then
+            echo "No open release PR at $SHA. It moved on since this run, or it's already merged."
+            exit 0
+          fi
+          # Every check on the PR, not just the workflow that woke this up.
+          not_done=$(gh pr view "$pr" -R "$REPO" --json statusCheckRollup --jq '
+            if (.statusCheckRollup | length) == 0 then "no checks reported yet" else empty end,
+            ([.statusCheckRollup[]
+             | select((.status // "COMPLETED") != "COMPLETED"
+                      or ((.conclusion // .state) | IN("SUCCESS","SKIPPED","NEUTRAL") | not))
+             | "\(.name // .context): \(.status // "") \(.conclusion // .state)"] | .[])')
+          if [ -n "$not_done" ]; then
+            echo "Not merging #$pr yet. These checks are still running or didn't pass:"
+            echo "$not_done"
+            exit 0
+          fi
+          # --match-head-commit refuses if release-please pushed again meanwhile;
+          # that newer commit gets its own checks and its own try.
+          # Empty body: the default lists every change, which release-please
+          # would then repeat in the changelog.
+          gh pr merge "$pr" -R "$REPO" --merge --body "" --match-head-commit "$SHA"
