@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/IamMrCupp/bench-parts/compare/v0.5.0...v0.5.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **license:** relicense to AGPL-3.0-or-later ([236f8c7](https://github.com/IamMrCupp/bench-parts/commit/236f8c703ccbba2da798c29f77f54bcae933258e))
+
 ## [0.5.0](https://github.com/IamMrCupp/bench-parts/compare/v0.4.0...v0.5.0) (2026-11-17)
 
 
