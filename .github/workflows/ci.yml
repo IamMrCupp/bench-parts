@@ -121,6 +121,20 @@ jobs:
           briefcase create macOS app --no-input
           briefcase build macOS app --no-input
 
+      # The same binary is the command line when given a command (bench-setup
+      # sets the app up this way on macOS): no display, no Qt, no prompt.
+      - name: The packaged app is also the command line
+        run: |
+          app="build/bench-parts/macos/app/bench parts.app/Contents/MacOS/bench parts"
+          data="$RUNNER_TEMP/cli-data"
+          "$app" --data-dir "$data" paths | tee "$RUNNER_TEMP/paths.txt"
+          grep -q "$data/settings.env" "$RUNNER_TEMP/paths.txt"
+          printf 'correct horse battery\n' | "$app" --data-dir "$data" set-password --stdin
+          token=$("$app" --data-dir "$data" new-token --print)
+          test "${#token}" -ge 20
+          grep -q "^BENCH_PARTS_PASSWORD_HASH=" "$data/settings.env"
+          grep -q "^BENCH_PARTS_API_TOKEN=$token$" "$data/settings.env"
+
       - name: The packaged app serves (smoke)
         env:
           BENCH_PARTS_TRAY_SMOKE: "1"
