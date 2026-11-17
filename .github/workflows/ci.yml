@@ -127,11 +127,15 @@ jobs:
         run: |
           app="build/bench-parts/macos/app/bench parts.app/Contents/MacOS/bench parts"
           data="$RUNNER_TEMP/cli-data"
-          "$app" --data-dir "$data" paths | tee "$RUNNER_TEMP/paths.txt"
-          grep -q "$data/settings.env" "$RUNNER_TEMP/paths.txt"
+          # Its output has to arrive on stdout, bare: inside the bundle Python
+          # writes to the system log unless the command path puts stdout back.
+          "$app" --data-dir "$data" paths > "$RUNNER_TEMP/paths.txt"
+          cat "$RUNNER_TEMP/paths.txt"
+          grep -qx "settings: $data/settings.env" "$RUNNER_TEMP/paths.txt"
           printf 'correct horse battery\n' | "$app" --data-dir "$data" set-password --stdin
           token=$("$app" --data-dir "$data" new-token --print)
           test "${#token}" -ge 20
+          case "$token" in *" "*) echo "the token isn't alone on stdout"; exit 1 ;; esac
           grep -q "^BENCH_PARTS_PASSWORD_HASH=" "$data/settings.env"
           grep -q "^BENCH_PARTS_API_TOKEN=$token$" "$data/settings.env"
 

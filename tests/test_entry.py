@@ -64,3 +64,26 @@ def test_a_password_and_a_token_can_be_set_through_the_entry_point(tmp_path) -> 
     settings = (tmp_path / "data" / "settings.env").read_text()
     assert "BENCH_PARTS_PASSWORD_HASH=" in settings
     assert f"BENCH_PARTS_API_TOKEN={token}" in settings
+
+
+def test_a_stream_that_is_not_the_terminal_is_replaced(monkeypatch) -> None:
+    """The packaged macOS app's stdout is a system-log writer with no file descriptor."""
+
+    class LogWriter:
+        def write(self, text: str) -> int:
+            return len(text)
+
+    monkeypatch.setattr(sys, "stdout", LogWriter())
+    entry.use_terminal_streams()
+    assert sys.stdout.fileno() == 1
+
+
+def test_a_stream_that_is_the_terminal_is_left_alone(monkeypatch) -> None:
+    class Real:
+        def fileno(self) -> int:
+            return 1
+
+    real = Real()
+    monkeypatch.setattr(sys, "stdout", real)
+    entry.use_terminal_streams()
+    assert sys.stdout is real
