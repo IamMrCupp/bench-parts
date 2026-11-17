@@ -179,6 +179,13 @@ It holds `parts.db` and `settings.env`, the owner-only settings file that
 points it elsewhere. **Environment variables always win over the settings
 file**, so the container and the cluster deployment below work exactly as before.
 
+Every page has a **Source** link in the footer, sign-in page included.
+`BENCH_PARTS_SOURCE_URL` sets where it points and defaults to this repository.
+If you run a modified copy for other people, point it at your own code — that's
+the offer of source AGPL section 13 asks for. It wants an `http://` or
+`https://` address; anything else is ignored and the link stays on this
+repository.
+
 ## Running it locally
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.12 is pinned via
