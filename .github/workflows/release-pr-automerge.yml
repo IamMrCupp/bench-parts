@@ -54,12 +54,23 @@ jobs:
             exit 0
           fi
           # Every check on the PR, not just the workflow that woke this up.
+          # A check can have more than one run on the same commit: release-please
+          # opens the PR and labels it in the same second, CI starts for both,
+          # and the first is cancelled in favour of the second. So each check is
+          # judged by its newest finished run, and by any run still going.
           not_done=$(gh pr view "$pr" -R "$REPO" --json statusCheckRollup --jq '
             if (.statusCheckRollup | length) == 0 then "no checks reported yet" else empty end,
             ([.statusCheckRollup[]
-             | select((.status // "COMPLETED") != "COMPLETED"
-                      or ((.conclusion // .state) | IN("SUCCESS","SKIPPED","NEUTRAL") | not))
-             | "\(.name // .context): \(.status // "") \(.conclusion // .state)"] | .[])')
+              | {check: "\(.workflowName // "") \(.name // .context)",
+                 name: (.name // .context),
+                 status: (.status // "COMPLETED"),
+                 result: (.conclusion // .state // ""),
+                 at: [(.startedAt // ""), (.completedAt // "")]}]
+             | group_by(.check)[]
+             | (map(select(.status != "COMPLETED")) | .[]),
+               (map(select(.status == "COMPLETED")) | max_by(.at) // empty
+                | select(.result | IN("SUCCESS","SKIPPED","NEUTRAL") | not))
+             | "\(.name): \(.status) \(.result)")')
           if [ -n "$not_done" ]; then
             echo "Not merging #$pr yet. These checks are still running or didn't pass:"
             echo "$not_done"
