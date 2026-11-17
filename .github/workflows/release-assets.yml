@@ -27,6 +27,8 @@ jobs:
     with:
       ref: ${{ inputs.tag }}
       full: true
+    # The macOS job signs with the Developer ID certificate, where there is one.
+    secrets: inherit
 
   attach:
     needs: build
@@ -49,7 +51,7 @@ jobs:
           shopt -s nullglob
           # Release assets can't sensibly carry spaces in their names.
           for f in dist/*' '*; do mv "$f" "${f// /-}"; done
-          files=(dist/*.deb dist/*.msi dist/*.zip)
+          files=(dist/*.deb dist/*.msi dist/*.zip dist/*.dmg)
           if [ ${#files[@]} -eq 0 ]; then echo "no installers built"; ls -l dist; exit 1; fi
           ls -l "${files[@]}"
           gh release upload "$TAG" "${files[@]}" --clobber -R "$GITHUB_REPOSITORY"

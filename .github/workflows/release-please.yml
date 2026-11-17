@@ -51,3 +51,5 @@ jobs:
     uses: ./.github/workflows/release-assets.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+    # Passed on to the build, which signs the macOS app.
+    secrets: inherit
