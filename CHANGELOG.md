@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/IamMrCupp/bench-parts/compare/v0.4.0...v0.5.0) (2026-11-17)
+
+
+### Features
+
+* **app:** the packaged app's binary takes the command line's commands ([8a6442a](https://github.com/IamMrCupp/bench-parts/commit/8a6442ab57fe35f3ce9fcfdd12490666d3146a08))
+
+
+### Bug Fixes
+
+* **app:** a command's output goes to stdout, not the system log ([7486ab7](https://github.com/IamMrCupp/bench-parts/commit/7486ab711a188025bc2f46a7e0596b2f1e434ceb))
+
+
+### Documentation
+
+* **readme:** the bench apt repo and bench-suite as a way to install ([edf8002](https://github.com/IamMrCupp/bench-parts/commit/edf800261bdfaa16f5009713869dc38c8cb9ba1e))
+
 ## [0.4.0](https://github.com/IamMrCupp/bench-parts/compare/v0.3.0...v0.4.0) (2026-11-08)
 
 
