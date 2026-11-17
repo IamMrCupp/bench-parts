@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/IamMrCupp/bench-parts/compare/v0.5.1...v0.6.0) (2026-11-17)
+
+
+### Features
+
+* **app:** show a Source link in the footer of every page ([e38e037](https://github.com/IamMrCupp/bench-parts/commit/e38e0377f00324cc585cc7371003a0392caf673f))
+
+
+### Documentation
+
+* **readme:** say the source link wants an http(s) address ([e38e037](https://github.com/IamMrCupp/bench-parts/commit/e38e0377f00324cc585cc7371003a0392caf673f))
+
 ## [0.5.1](https://github.com/IamMrCupp/bench-parts/compare/v0.5.0...v0.5.1) (2026-11-17)
 
 
