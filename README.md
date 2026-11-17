@@ -30,8 +30,9 @@ calls intake to validate it.
 Every [release](https://github.com/IamMrCupp/bench-parts/releases) has its installers
 attached: the Linux service `.deb` (amd64 and arm64), the Windows tray-app MSI
 and the macOS tray app. They're built by the same CI jobs every PR runs, at the
-release tag, including the install checks. The macOS app is ad-hoc signed, so
-the first launch needs right-click → Open.
+release tag, including the install checks. The macOS app is a `.dmg` for Apple
+silicon, signed with a Developer ID and notarized, so it opens without a
+Gatekeeper warning.
 
 ```bash
 gh release download --repo IamMrCupp/bench-parts --pattern '*_amd64.deb'
@@ -57,11 +58,36 @@ menu bar (macOS) or system tray (Windows), with no window of its own.
   so you can switch between the two.
 
 Download it from the latest [release](https://github.com/IamMrCupp/bench-parts/releases):
-the `.app.zip` (macOS, ad-hoc signed, so right-click → Open the first time) or
-the `.msi` (Windows). Both are built for every release (and on a PR labelled
+the `.dmg` (macOS, Apple silicon, signed and notarized) or the `.msi`
+(Windows). Both are built for every release (and on a PR labelled
 `full-ci`), and launched in a smoke mode that serves and answers `/healthz`
 before they're attached. From a `uv tool` install, run it with
 `bench-parts tray` (install the `tray` extra: `'bench-parts[tray] @ git+…'`).
+
+On a Mac, [Homebrew](https://github.com/IamMrCupp/homebrew-bench) also installs it, and keeps it current with
+`brew upgrade`:
+
+```sh
+brew tap iammrcupp/bench
+brew install --cask bench-parts
+```
+
+**The whole bench on a Mac (optional).** If the same Mac runs the rest of the
+bench, the tap's `bench-suite` cask installs benchhud, both menu-bar apps and
+`bench-setup`:
+
+```sh
+brew tap iammrcupp/bench
+brew trust --tap iammrcupp/bench
+brew install --cask bench-suite
+bench-setup
+```
+
+`bench-setup` sets one password for both apps, makes a token each, and writes
+the URLs and tokens into benchhud's config, so there's no token to copy by
+hand. macOS asks before the first launch of a download, so it will tell you to
+open bench parts once from Applications, then run it again. Nothing here needs it.
+See [bench-suite](https://github.com/IamMrCupp/bench-suite#on-a-mac).
 
 To build the app yourself: `uvx briefcase create macOS app && uvx briefcase build macOS app`
 (or `windows`). `scripts/make_icons.py` regenerates the icons.
