@@ -1,5 +1,7 @@
-"""``python -m bench_parts`` (and the packaged app): the menu-bar / tray app."""
+"""``python -m bench_parts`` (and the packaged app): the tray app, or a command."""
 
-from bench_parts.tray import main
+import sys
 
-raise SystemExit(main())
+from bench_parts.entry import main
+
+raise SystemExit(main(sys.argv[1:]))
