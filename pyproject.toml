@@ -4,13 +4,13 @@ dynamic = ["version"]
 description = "Self-hosted parts inventory for a board-repair bench — a tablet-friendly app plus a REST API benchhud and other LAN clients consume."
 readme = "README.md"
 requires-python = ">=3.12"
-license = "PolyForm-Small-Business-1.0.0"
+license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{ name = "Aaron Cupp" }]
 keywords = ["inventory", "parts", "board-repair", "bench", "self-hosted"]
 
-# This package is not open source. The classifier makes PyPI refuse an upload
-# outright — belt and braces against a stray `uv publish`.
+# This package ships from GitHub, not PyPI. The classifier makes PyPI refuse an
+# upload outright — belt and braces against a stray `uv publish`.
 classifiers = ["Private :: Do Not Upload"]
 
 dependencies = [
