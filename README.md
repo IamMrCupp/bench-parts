@@ -79,6 +79,23 @@ sudo bench-parts new-token        # for benchhud and scripts
 sudo systemctl start bench-parts  # http://127.0.0.1:8402/
 ```
 
+**Or from the bench apt repo (optional).** The same package is in the signed
+apt repo that [bench-suite](https://github.com/IamMrCupp/bench-suite#readme)
+publishes, so updates arrive with `apt upgrade`:
+
+```bash
+sudo curl -fsSLo /usr/share/keyrings/bench-archive-keyring.gpg https://apt.yolorepair.com/bench-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/bench-archive-keyring.gpg] https://apt.yolorepair.com stable main" \
+  | sudo tee /etc/apt/sources.list.d/bench.list
+sudo apt update
+sudo apt install bench-parts
+```
+
+If the same machine runs the rest of the bench, `sudo apt install bench-suite`
+installs the lot, and `sudo bench-setup` does the setup above for every service
+at once: one password, a token each, and the URLs and tokens written into
+benchhud's config. `bench-setup doctor` checks the result. Nothing here needs it.
+
 - It runs as its own `bench-parts` system user, with its data in
   `/var/lib/bench-parts`, and it's enabled to start at boot.
 - It runs **sandboxed**: no capabilities, a read-only view of the system
