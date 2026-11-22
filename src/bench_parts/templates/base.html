@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="en">
+{# Single-quoted on purpose: tojson escapes ' (and < > &), so the JSON can't
+   end the attribute. #}
+<html lang="en" data-themes='{{ themes | tojson }}'>
   <head>
     <meta charset="utf-8" />
     {# The client is a tablet held in one hand at a bench. This tag is not
@@ -16,6 +18,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Parts" />
+    {# The Appearance choice, painted before the body is drawn. The themes the
+       server found (colours only, checked in bench_parts/themes.py) ride on
+       <html data-themes>, not in a script block: no inline script at all. #}
+    <script src="/static/theme.js"></script>
 
     {# Inline, no build step, no framework, no external fonts — the WAN may be
        down and the tablet must still load. The numbers that matter: 44px touch
@@ -23,33 +29,121 @@
        Everything else here is a type scale, a spacing scale, and a palette
        that reads at arm's length under bench lighting. #}
     <style>
+      /* The bench look: burnwright's and benchhud's palette. Every colour on a
+         page is one of the --bw-* properties here, the same names and values
+         as burnwright's App.css: light at :root, dark under
+         [data-theme="dark"]. /static/theme.js sets data-theme from the
+         Appearance choice, and a custom theme sets some of them inline over
+         its base look (bench_parts/themes.py). The names this stylesheet was
+         written against (--bg, --ink, --ok, --low, --out …) are aliases. */
       :root {
-        /* palette */
-        --bg: #f4f5f7;        /* page */
-        --surface: #ffffff;   /* cards, inputs, table */
-        --surface-2: #eef0f3; /* table head, hover */
-        --ink: #16191d;
-        --ink-2: #3b424b;
-        --muted: #6b7280;
-        --line: #d9dde3;
-        --line-2: #c3c9d2;
-        --accent: #1c4f8f;
-        --accent-ink: #ffffff;
-        --bad: #a4232b;
-        --bad-bg: #fdf2f2;
+        --bw-bg: #f1f1f4;
+        --bw-panel: #ffffff;
+        --bw-border: #d2d2d8;
+        --bw-fg: #1d1d1f;
+        --bw-muted: #5c5c63;
+
+        --bw-control-bg: #ffffff;
+        --bw-control-border: #b9b9c2;
+        --bw-control-hover: #f0f2f8;
+
+        --bw-accent: #2f5fcf;
+        --bw-accent-soft: #e3ebff;
+
+        --bw-danger: #b3261e;
+        --bw-danger-soft: #fdecea;
+        --bw-warning: #8a4b06;
+        --bw-warning-soft: #fff5e0;
+        --bw-warning-border: #b45309;
+        --bw-ok: #1b6b3a;
+        --bw-ok-soft: #e8f5ec;
+
+        --bw-backdrop: rgba(0, 0, 0, 0.45);
+        --bw-shadow: rgba(0, 0, 0, 0.35);
+
+
+        color-scheme: light;
+      }
+
+      :root[data-theme="dark"] {
+        --bw-bg: #151517;
+        --bw-panel: #1f1f22;
+        --bw-border: #3a3a40;
+        --bw-fg: #ececef;
+        --bw-muted: #a3a3ab;
+
+        --bw-control-bg: #2a2a2e;
+        --bw-control-border: #55555d;
+        --bw-control-hover: #34343a;
+
+        --bw-accent: #8fb0ff;
+        --bw-accent-soft: #24345c;
+
+        --bw-danger: #ff9a92;
+        --bw-danger-soft: #4a1f1c;
+        --bw-warning: #ffc66b;
+        --bw-warning-soft: #3d2e10;
+        --bw-warning-border: #f59e0b;
+        --bw-ok: #7fd6a0;
+        --bw-ok-soft: #173624;
+
+        color-scheme: dark;
+      }
+
+      /* Before the script has run (or with it blocked): follow the system, so a
+         dark tablet doesn't open on a white page. */
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme]) {
+          --bw-bg: #151517;
+          --bw-panel: #1f1f22;
+          --bw-border: #3a3a40;
+          --bw-fg: #ececef;
+          --bw-muted: #a3a3ab;
+          --bw-control-bg: #2a2a2e;
+          --bw-control-border: #55555d;
+          --bw-control-hover: #34343a;
+          --bw-accent: #8fb0ff;
+          --bw-accent-soft: #24345c;
+          --bw-danger: #ff9a92;
+          --bw-danger-soft: #4a1f1c;
+          --bw-warning: #ffc66b;
+          --bw-warning-soft: #3d2e10;
+          --bw-warning-border: #f59e0b;
+          --bw-ok: #7fd6a0;
+          --bw-ok-soft: #173624;
+          color-scheme: dark;
+        }
+      }
+
+      :root {
+        /* palette: aliases onto the --bw-* set */
+        --bg: var(--bw-bg);
+        --surface: var(--bw-panel);
+        --surface-2: var(--bw-control-hover);
+        --ink: var(--bw-fg);
+        --ink-2: var(--bw-fg);
+        --muted: var(--bw-muted);
+        --line: var(--bw-border);
+        --line-2: var(--bw-control-border);
+        --accent: var(--bw-accent);
+        --accent-soft: var(--bw-accent-soft);
+        --accent-ink: var(--bw-panel);
+        --bad: var(--bw-danger);
+        --bad-bg: var(--bw-danger-soft);
         /* stock status — one hue each, solid enough for a glance */
-        --ok: #1f7a3d;
-        --low: #b5730a;
-        --out: #b3262e;
-        --ok-bg: #e8f5ec;
-        --low-bg: #fdf3e1;
-        --out-bg: #fbe9ea;
+        --ok: var(--bw-ok);
+        --low: var(--bw-warning);
+        --out: var(--bw-danger);
+        --ok-bg: var(--bw-ok-soft);
+        --low-bg: var(--bw-warning-soft);
+        --out-bg: var(--bw-danger-soft);
         /* scale */
         --touch: 44px;
-        --radius: 10px;
-        --radius-sm: 7px;
-        --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
-        --focus: 0 0 0 3px rgba(28, 79, 143, .35);
+        /* burnwright's: 8px panels, 6px controls, flat cards. */
+        --radius: 8px;
+        --radius-sm: 6px;
+        --shadow: none;
+        --focus: 0 0 0 2px var(--bw-accent);
         --fs-0: 0.8rem;   /* labels, captions */
         --fs-1: 0.92rem;
         --fs-2: 1rem;     /* body = 17px */
@@ -65,7 +159,9 @@
         margin: 0;
         background: var(--bg);
         color: var(--ink);
-        font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+        font: 17px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+        font-synthesis: none;
+        -webkit-font-smoothing: antialiased;
         font-variant-numeric: tabular-nums;
       }
       a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
@@ -90,19 +186,20 @@
       }
       .signout button:hover { color: var(--ink); border-color: var(--line-2); }
 
-      nav.tabs { display: flex; gap: var(--sp-1); overflow-x: auto; scrollbar-width: none; }
+      /* burnwright's mode buttons: quiet until they're the page you're on. */
+      nav.tabs { display: flex; gap: var(--sp-1); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--sp-2); }
       nav.tabs::-webkit-scrollbar { display: none; }
       nav.tabs a {
         display: inline-flex; align-items: center; gap: var(--sp-2);
         min-height: var(--touch); padding: 0 var(--sp-3);
-        color: var(--ink-2); text-decoration: none; font-weight: 600; font-size: var(--fs-2);
-        border-bottom: 3px solid transparent; white-space: nowrap;
+        color: var(--muted); text-decoration: none; font-weight: 500; font-size: var(--fs-2);
+        border: 1px solid transparent; border-radius: var(--radius-sm); white-space: nowrap;
       }
-      nav.tabs a:hover { color: var(--ink); border-bottom-color: var(--line-2); }
-      nav.tabs a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
+      nav.tabs a:hover { color: var(--ink); background: var(--surface-2); }
+      nav.tabs a[aria-current="page"] { color: var(--ink); background: var(--bg); border-color: var(--line); }
       .count-badge {
         display: inline-block; min-width: 1.5em; padding: 0 0.45em; border-radius: 999px;
-        background: var(--low); color: #fff; font-size: var(--fs-0); font-weight: 700; text-align: center; line-height: 1.6;
+        background: var(--low); color: var(--surface); font-size: var(--fs-0); font-weight: 700; text-align: center; line-height: 1.6;
       }
 
       main { padding-top: var(--sp-5); padding-bottom: var(--sp-6); }
@@ -127,7 +224,7 @@
         padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--radius-sm);
         background: var(--surface); color: var(--ink);
       }
-      input::placeholder, textarea::placeholder { color: #9aa1ab; }
+      input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
       textarea { min-height: calc(var(--touch) * 1.8); resize: vertical; }
       input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: var(--focus); outline: none; }
       button { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; cursor: pointer; min-height: calc(var(--touch) * 1.1); }
@@ -159,7 +256,7 @@
       .badge.retired-badge { background: var(--surface-2); color: var(--muted); }
       /* asset lifecycle badges — available green, assigned blue, repair amber, retired muted */
       .badge.asset-available { background: var(--ok-bg); color: var(--ok); }
-      .badge.asset-assigned { background: rgba(28,79,143,.12); color: var(--accent); }
+      .badge.asset-assigned { background: var(--accent-soft); color: var(--accent); }
       .badge.asset-out_for_repair { background: var(--low-bg); color: var(--low); }
       .badge.asset-retired { background: var(--surface-2); color: var(--muted); }
       .chip { display: inline-block; padding: 0.02rem var(--sp-2); border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: var(--fs-0); white-space: nowrap; vertical-align: middle; background: var(--surface); }
@@ -172,8 +269,17 @@
       .timestamps { color: var(--muted); font-size: var(--fs-0); margin-top: var(--sp-6); }
       /* Where the code lives. Small and out of the way, but the link is still
          a full-height finger target. */
-      footer { max-width: 56rem; margin: 0 auto; padding: 0 var(--sp-4) var(--sp-5); }
-      footer p { margin: 0; padding-top: var(--sp-2); border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-0); }
+      .page-foot {
+        max-width: 56rem; margin: 0 auto; padding: var(--sp-2) var(--sp-4) var(--sp-5);
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4);
+        border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-0);
+      }
+      footer p { margin: 0; }
+      .appearance { display: flex; align-items: center; gap: var(--sp-2); margin: 0; }
+      .appearance label { margin: 0; font-weight: 500; font-size: var(--fs-0); }
+      .appearance select { width: auto; font-size: 16px; min-height: 40px; padding: 0 var(--sp-2); }
+      .notice.theme-problems { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; border-left-color: var(--low); background: var(--low-bg); color: var(--low); }
+      .theme-problems ul { margin: var(--sp-1) 0 0; padding-left: 1.25rem; }
       footer a { display: inline-block; min-height: var(--touch); line-height: var(--touch); }
       /* Order page: one basket per supplier. */
       .order-summary { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
@@ -218,7 +324,7 @@
 
       /* ---- narrow: list tables become cards -------------------------------------- */
       @media (max-width: 40rem) {
-        main, .topbar-inner, footer { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+        main, .topbar-inner, .page-foot { padding-left: var(--sp-3); padding-right: var(--sp-3); }
         table.parts, table.parts tbody, table.parts tr, table.parts td { display: block; }
         table.parts thead { display: none; }
         table.parts { border: 0; box-shadow: none; background: transparent; overflow: visible; }
@@ -247,24 +353,6 @@
         form.filters { position: static; }
       }
 
-      /* ---- dark ------------------------------------------------------------------ */
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #121417; --surface: #1b1e23; --surface-2: #23272e;
-          --ink: #e8ebf0; --ink-2: #c2c8d1; --muted: #8f98a4;
-          --line: #2c3139; --line-2: #3a4049;
-          --accent: #7fb2f0; --accent-ink: #0e1420;
-          --bad: #f08a8a; --bad-bg: #2a1c1e;
-          --ok: #5fce86; --low: #e0a44a; --out: #f08a8a;
-          --ok-bg: #18291e; --low-bg: #2b2416; --out-bg: #2c1b1d;
-          --shadow: 0 1px 2px rgba(0,0,0,.4);
-          --focus: 0 0 0 3px rgba(127,178,240,.4);
-        }
-        input::placeholder, textarea::placeholder { color: #6f7885; }
-        .count-badge { color: #0e1420; }
-        nav.tabs a[aria-current="page"] .count-badge { background: var(--accent); }
-        .badge.status-ok, .badge.status-low, .badge.status-out { filter: none; }
-      }
     </style>
   </head>
   <body>
@@ -278,7 +366,7 @@
           {% if authenticated %}
             <form method="post" action="/logout" class="signout">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <button type="submit">Sign out</button>
+              <button type="submit" class="secondary">Sign out</button>
             </form>
           {% endif %}
         </div>
@@ -302,12 +390,32 @@
     </main>
     {# AGPL section 13: the offer of source, on every page and before sign-in.
        The link and the licence name only — never anything from the inventory. #}
-    <footer>
-      <p>
-        <a href="{{ source_url }}" target="_blank" rel="noopener noreferrer">Source</a>
-        · {{ license_name }}
+    <div class="page-foot">
+      <footer>
+        <p>
+          <a href="{{ source_url }}" target="_blank" rel="noopener noreferrer">Source</a>
+          · {{ license_name }}
+        </p>
+      </footer>
+      {# Beside the footer, not in it. Filled in and shown by theme.js. #}
+      <p class="appearance">
+        <label for="appearance">Appearance</label>
+        <select id="appearance" hidden>
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
       </p>
-    </footer>
+      {# Only to someone signed in: it names files on the server. #}
+      {% if authenticated and theme_problems %}
+        <div class="theme-problems notice">
+          Some theme files in {{ themes_folder }} couldn't be used:
+          <ul>
+            {% for problem in theme_problems %}<li>{{ problem }}</li>{% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
     <script src="/static/app.js" defer></script>
   </body>
 </html>

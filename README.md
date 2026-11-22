@@ -186,6 +186,33 @@ the offer of source AGPL section 13 asks for. It wants an `http://` or
 `https://` address; anything else is ignored and the link stays on this
 repository.
 
+## Looks and themes
+
+Same look as benchhud, burnwright, benchhud-intake and bench-recon — same
+palette, same panels. **Appearance**, at the foot of every page, picks System,
+Light or Dark, and the choice sticks in that browser.
+
+For your own, drop a burnwright theme file into the `themes` folder in the data
+folder (`bench-parts paths` shows where), or point `BENCH_PARTS_THEMES_DIR` at a
+folder of them. It shows up in the Appearance list on the next page load. The
+format is burnwright's, so a theme you've written for it works here unchanged:
+
+```json
+{
+  "name": "Amber terminal",
+  "base": "dark",
+  "colors": { "bg": "#120d02", "panel": "#1b1404", "fg": "#ffcf70", "accent": "#ffb000" }
+}
+```
+
+`base` is `"light"` or `"dark"`; anything you leave out comes from it. Colours
+only — hex, `rgb()` or `hsl()` — with burnwright's names (`bg`, `panel`,
+`border`, `fg`, `muted`, `control-bg`, `control-border`, `control-hover`,
+`accent`, `accent-soft`, `danger`, `danger-soft`, `warning`, `warning-soft`,
+`warning-border`, `ok`, `ok-soft`). Stock status follows them: in stock is
+`ok`, low is `warning`, out is `danger`. A file that can't be used is named at
+the foot of the page, to anyone signed in, with the reason.
+
 ## Running it locally
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.12 is pinned via

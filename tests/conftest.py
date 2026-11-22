@@ -43,6 +43,9 @@ TEST_PASSWORD = "bench password"
 os.environ.setdefault(ENV_VAR, hash_password(TEST_PASSWORD))
 os.environ.setdefault(SESSION_ENV_VAR, "test-session-secret-not-a-real-one")
 os.environ.setdefault(COOKIE_SECURE_ENV_VAR, "0")
+# Never read the real themes folder under the developer's home: tests that
+# want themes point this at a tmp_path of their own.
+os.environ.setdefault("BENCH_PARTS_THEMES_DIR", os.path.join(os.devnull, "no-themes"))
 
 _TOKEN_RE = re.compile(r'name="csrf_token"\s+value="([^"]+)"')
 
