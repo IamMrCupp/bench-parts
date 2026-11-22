@@ -41,6 +41,7 @@ from bench_parts.forms import (
 from bench_parts.ratelimit import RateLimiter
 from bench_parts.schema import initialise
 from bench_parts.store import Part, PartStore
+from bench_parts.themes import load_themes, themes_dir
 from bench_parts.vocabulary import AssetStatus, AssetType, Category
 
 
@@ -273,6 +274,25 @@ def _page_context(request: Request) -> dict[str, object]:
         # so it is safe on the sign-in page.
         "source_url": source_url(),
         "license_name": LICENSE_NAME,
+        **_theme_context(),
+    }
+
+
+def _theme_context() -> dict[str, object]:
+    """The custom themes for the Appearance choice, read fresh on each page.
+
+    Colours only, checked in ``bench_parts.themes``, so they're safe on the
+    sign-in page too. Which files failed, and the folder's path, are shown only
+    to someone signed in (see base.html).
+    """
+    folder = themes_dir()
+    themes, broken = load_themes(folder)
+    problems = [f"{b.file}: {b.reason}" for b in broken]
+    problems += [f"{t.id}: {note}" for t in themes for note in t.ignored]
+    return {
+        "themes": [t.as_json() for t in themes],
+        "theme_problems": problems,
+        "themes_folder": str(folder),
     }
 
 
