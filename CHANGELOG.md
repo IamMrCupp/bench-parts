@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/IamMrCupp/bench-parts/compare/v0.6.0...v0.7.0) (2026-11-22)
+
+
+### Features
+
+* **web:** burnwright look with light, dark and custom themes ([3ead52b](https://github.com/IamMrCupp/bench-parts/commit/3ead52b21abaccb822ccf878271ec43963c1b8d9))
+* **web:** burnwright look with light, dark and custom themes ([c355d8b](https://github.com/IamMrCupp/bench-parts/commit/c355d8ba320d28981d5072e9a9b8b1f749b7e585))
+
 ## [0.6.0](https://github.com/IamMrCupp/bench-parts/compare/v0.5.1...v0.6.0) (2026-11-17)
 
 
