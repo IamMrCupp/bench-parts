@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.1](https://github.com/IamMrCupp/bench-parts/compare/v0.7.0...v0.7.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **serve:** believe forwarded headers only from trusted proxies ([#151](https://github.com/IamMrCupp/bench-parts/issues/151)) ([96b86b6](https://github.com/IamMrCupp/bench-parts/commit/96b86b68e9e243eab1f93d50d08e7d5fb39057e7))
+* **serve:** believe forwarded headers only from trusted proxies ([#151](https://github.com/IamMrCupp/bench-parts/issues/151)) ([102d77c](https://github.com/IamMrCupp/bench-parts/commit/102d77ca6ce7e14e2023ba042b3f9254a5fdef87))
+* **serve:** believe no forwarded headers unless a proxy is listed ([#151](https://github.com/IamMrCupp/bench-parts/issues/151)) ([791f70f](https://github.com/IamMrCupp/bench-parts/commit/791f70f2c2749b3acc7d9c47b3958862f0c86b1d))
+
 ## [0.7.0](https://github.com/IamMrCupp/bench-parts/compare/v0.6.0...v0.7.0) (2026-11-22)
 
 
