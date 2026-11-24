@@ -20,7 +20,8 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from bench_parts import auth, settings
+from bench_parts import auth, proxies, settings
+from bench_parts.proxies import TRUSTED_PROXIES_ENV_VAR
 
 #: Addresses that keep the server on this machine.
 _LOOPBACK = {"127.0.0.1", "localhost", "::1"}
@@ -52,6 +53,14 @@ def cmd_serve(args: argparse.Namespace, run: Callable[..., None] | None = None) 
             "page and the API. Keep it off public networks.",
             file=sys.stderr,
         )
+    try:
+        forwarded = proxies.server_options()
+    except ValueError as exc:
+        print(
+            f"{TRUSTED_PROXIES_ENV_VAR}: {exc}. bench-parts won't start until it's fixed or unset.",
+            file=sys.stderr,
+        )
+        return 2
     from bench_parts.app import app  # imported late: it reads the settings at import
 
     if run is None:
@@ -59,7 +68,9 @@ def cmd_serve(args: argparse.Namespace, run: Callable[..., None] | None = None) 
 
         run = uvicorn.run
     print(f"bench-parts on http://{args.host}:{args.port}/  (data: {data})")
-    run(app, host=args.host, port=args.port)
+    # Listed proxies are believed about the client's address and scheme; with
+    # none listed, uvicorn's proxy-headers middleware is switched off entirely.
+    run(app, host=args.host, port=args.port, **forwarded)
     return 0
 
 
