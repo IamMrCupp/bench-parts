@@ -287,16 +287,24 @@ BENCH_PARTS_COOKIE_SECURE=1
 
 When the connection comes from a listed address, `X-Forwarded-For` and
 `X-Forwarded-Proto` are believed. From anyone else they're ignored. Unset,
-nothing changes.
+nobody is believed, loopback included. `serve` and the menu-bar app both read
+it.
 
 - **Keep it as narrow as you can.** The proxy's own address, or on Kubernetes
   the ingress controller's pod range. Not the whole LAN. Anything inside a
   trusted range can send its own `X-Forwarded-For` and so choose its own
   throttle bucket, which is the lockout handed back to whoever wants around it.
+- **A proxy on the same machine is listed like any other:**
+  `BENCH_PARTS_TRUSTED_PROXIES=127.0.0.1`. Loopback gets no free pass, because
+  on a one-machine install every browser is loopback and any of them could
+  then pick its own bucket. If you ran nginx or Caddy on the same box before
+  this setting existed, its forwarded headers were believed without asking;
+  now it has to be listed.
 - **`serve` refuses a list it can't stand behind**, with exit code 2 and the
   reason: `*`, a range that covers every address (`0.0.0.0/0`, `::/0`), or an
   entry that isn't an address or a range. A typo doesn't quietly mean "trust
-  nothing" while the bench stays lockable.
+  nothing" while the bench stays lockable. The menu-bar app shows the same
+  reason and stays stopped.
 - **It belongs with HTTPS.** If the proxy terminates TLS, set
   `BENCH_PARTS_COOKIE_SECURE=1` as well, so the session cookie is only sent
   over it. Don't set that without TLS: the browser would never send the cookie

@@ -53,7 +53,8 @@ Then `kubectl apply -k overlays/bench`.
 
 ## Behind an ingress
 
-The overlay above exposes the Service directly, and needs nothing more. If you
+The overlay above exposes the Service directly, and needs nothing more: with
+no proxies listed, forwarded headers are ignored from every peer. If you
 put an ingress controller in front instead (LAN-only, terminating TLS), every
 browser reaches the pod from the controller's address. Without the setting
 below, five wrong passwords from any device lock sign-in for everyone for five

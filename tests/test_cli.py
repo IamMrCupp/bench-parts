@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from bench_parts import auth, cli, settings
+from bench_parts import auth, cli, proxies, settings
+from bench_parts.proxies import TRUSTED_PROXIES_ENV_VAR
 
 # --- the data folder ------------------------------------------------------------
 
@@ -138,7 +139,7 @@ def test_serve_uses_the_data_folder_and_stays_on_loopback(tmp_path, monkeypatch,
         _args(tmp_path, "serve", "--port", "8123"), run=lambda app, **kw: calls.append(kw)
     )
     assert code == 0
-    assert calls == [{"host": "127.0.0.1", "port": 8123}]
+    assert calls == [{"host": "127.0.0.1", "port": 8123, "proxy_headers": False}]
     assert os.environ["BENCH_PARTS_DB_PATH"] == str(tmp_path / "parts.db")
     assert "anyone on this network" not in capsys.readouterr().err
 
@@ -157,7 +158,7 @@ def test_serve_defaults_to_bench_suites_port(tmp_path) -> None:
     """8402: parts' port in bench-suite (intake 8401, recon 8403), so they share a host."""
     calls = []
     cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw))
-    assert calls == [{"host": "127.0.0.1", "port": 8402}]
+    assert calls == [{"host": "127.0.0.1", "port": 8402, "proxy_headers": False}]
 
 
 # --- non-interactive, for bench-setup (#120) -------------------------------------
@@ -231,21 +232,24 @@ def test_new_token_print_writes_only_the_token(tmp_path, capsys) -> None:
 
 
 # --- behind a reverse proxy (#151) -----------------------------------------------
+#
+# What the list does once uvicorn has it is in test_trusted_proxies.py.
 
 
-@pytest.mark.parametrize("value", [None, "", "  "])
-def test_serve_passes_nothing_extra_without_trusted_proxies(tmp_path, value) -> None:
-    """Unset (or blank), uvicorn is started exactly as it was before the setting."""
-    os.environ.pop(cli.TRUSTED_PROXIES_ENV, None)
+@pytest.mark.parametrize("value", [None, "", "  ", ","])
+def test_serve_believes_nobody_without_trusted_proxies(tmp_path, value) -> None:
+    """Unset or blank, uvicorn's proxy-headers middleware is switched off. Left
+    on, it would believe loopback, which on a one-machine install is everyone."""
+    os.environ.pop(TRUSTED_PROXIES_ENV_VAR, None)
     if value is not None:
-        os.environ[cli.TRUSTED_PROXIES_ENV] = value
+        os.environ[TRUSTED_PROXIES_ENV_VAR] = value
     calls = []
     assert cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw)) == 0
-    assert calls == [{"host": "127.0.0.1", "port": 8402}]
+    assert calls == [{"host": "127.0.0.1", "port": 8402, "proxy_headers": False}]
 
 
 def test_serve_hands_trusted_proxies_to_uvicorn(tmp_path) -> None:
-    os.environ[cli.TRUSTED_PROXIES_ENV] = "10.42.0.0/16, 192.168.7.2 ,fd00:42::/64,"
+    os.environ[TRUSTED_PROXIES_ENV_VAR] = "10.42.0.0/16, 192.168.7.2 ,fd00:42::/64,"
     calls = []
     assert cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw)) == 0
     assert calls == [
@@ -258,17 +262,18 @@ def test_serve_hands_trusted_proxies_to_uvicorn(tmp_path) -> None:
 
 
 def test_serve_reads_trusted_proxies_from_the_settings_file(tmp_path) -> None:
-    os.environ.pop(cli.TRUSTED_PROXIES_ENV, None)
-    settings.write_setting(tmp_path / "settings.env", cli.TRUSTED_PROXIES_ENV, "10.42.0.0/16")
+    os.environ.pop(TRUSTED_PROXIES_ENV_VAR, None)
+    settings.write_setting(tmp_path / "settings.env", TRUSTED_PROXIES_ENV_VAR, "10.42.0.0/16")
     calls = []
     cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw))
-    assert calls[0]["forwarded_allow_ips"] == "10.42.0.0/16"
+    assert calls == [{"host": "127.0.0.1", "port": 8402, "forwarded_allow_ips": "10.42.0.0/16"}]
 
 
 def test_a_range_with_host_bits_is_normalised_for_uvicorn() -> None:
     """uvicorn parses ranges strictly and would match ``10.42.1.5/16`` as a
     literal string, which is to say never."""
-    assert cli.trusted_proxies("10.42.1.5/16") == "10.42.0.0/16"
+    os.environ[TRUSTED_PROXIES_ENV_VAR] = "10.42.1.5/16"
+    assert proxies.trusted_proxies() == "10.42.0.0/16"
 
 
 @pytest.mark.parametrize(
@@ -282,15 +287,14 @@ def test_a_range_with_host_bits_is_normalised_for_uvicorn() -> None:
         "10.42.0.0/33",
         "ingress-nginx",
         "10.42.0.0/16 10.43.0.0/16",
-        ",",
     ],
 )
 def test_serve_refuses_trusted_proxies_it_cannot_stand_behind(tmp_path, capsys, value) -> None:
     """A catch-all gives the throttle bucket back to the client, and a typo must
     not quietly mean "trust nothing": both stop ``serve`` with the reason."""
-    os.environ[cli.TRUSTED_PROXIES_ENV] = value
+    os.environ[TRUSTED_PROXIES_ENV_VAR] = value
     ran = []
     code = cli.cmd_serve(_args(tmp_path, "serve"), run=lambda *a, **k: ran.append(a))
     assert code == 2
     assert ran == []
-    assert cli.TRUSTED_PROXIES_ENV in capsys.readouterr().err
+    assert TRUSTED_PROXIES_ENV_VAR in capsys.readouterr().err

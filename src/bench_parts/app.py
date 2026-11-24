@@ -101,10 +101,11 @@ def _client_ip(request: Request) -> str | None:
     This does not read `X-Forwarded-For`, and must not start: a header anyone
     can set would let a client pick its own throttle bucket. Behind a reverse
     proxy, set `BENCH_PARTS_TRUSTED_PROXIES` to the proxy's address or range.
-    `serve` hands that to uvicorn, whose proxy-headers middleware replaces
-    `request.client` with the forwarded address only when the TCP peer is
-    listed. Unset, every request is its peer, and behind a proxy that means
-    every browser shares one bucket.
+    `serve` and the tray app hand that to uvicorn (`bench_parts.proxies`),
+    whose proxy-headers middleware replaces `request.client` with the forwarded
+    address only when the TCP peer is listed. Unset, that middleware is off:
+    every request is its peer, loopback included, and behind a proxy that
+    means every browser shares one bucket.
     """
     return request.client.host if request.client else None
 

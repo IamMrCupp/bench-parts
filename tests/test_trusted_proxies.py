@@ -1,22 +1,33 @@
 """Behind a reverse proxy (#151).
 
-``serve`` hands ``BENCH_PARTS_TRUSTED_PROXIES`` to uvicorn, and uvicorn wraps the
-app in its ``ProxyHeadersMiddleware``. These tests wrap the app the same way and
-connect from a chosen peer address, so they exercise what a browser behind the
-ingress gets: its own login throttle bucket, and ``https`` in the URLs the API
-builds. From a peer that isn't listed, the forwarded headers must do nothing.
+``serve`` and the tray app hand ``BENCH_PARTS_TRUSTED_PROXIES`` to uvicorn
+(``bench_parts.proxies``), and uvicorn wraps the app in its
+``ProxyHeadersMiddleware``. Three layers of test:
+
+- the app behind that middleware, reached from a chosen peer address: what a
+  browser behind the ingress gets, which is its own login throttle bucket and
+  ``https`` in the URLs the API builds;
+- ``uvicorn.Config`` loaded with the real options: the middleware is there only
+  when the setting is;
+- the real server over real HTTP on loopback: unset, even ``127.0.0.1`` is not
+  believed.
 
 What ``serve`` passes to uvicorn, and what it refuses, is in ``test_cli.py``.
 """
 
+import json
 import re
+import urllib.request
 
 import pytest
 from fastapi.testclient import TestClient
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from bench_parts import proxies
 from bench_parts.app import app, login_limiter
 from bench_parts.auth import API_TOKEN_ENV_VAR
+from bench_parts.proxies import TRUSTED_PROXIES_ENV_VAR
+from bench_parts.server import ServerController
 
 _TOKEN_RE = re.compile(r'name="csrf_token"\s+value="([^"]+)"')
 
@@ -26,19 +37,27 @@ STRANGER = ("192.168.7.99", 50000)  # reaches the pod without going through it
 API_TOKEN = "test-api-token-not-a-real-one"
 
 
-def _behind(peer):
-    """The app as uvicorn serves it with the setting on, reached from ``peer``."""
-    return TestClient(ProxyHeadersMiddleware(app, trusted_hosts=TRUSTED_RANGE), client=peer)
+@pytest.fixture(autouse=True)
+def _no_setting(monkeypatch):
+    monkeypatch.delenv(TRUSTED_PROXIES_ENV_VAR, raising=False)
+
+
+def _behind(peer, monkeypatch):
+    """The app as uvicorn serves it with the setting on, reached from ``peer``:
+    the list goes through the same parser, into the same middleware."""
+    monkeypatch.setenv(TRUSTED_PROXIES_ENV_VAR, TRUSTED_RANGE)
+    wrapped = ProxyHeadersMiddleware(app, trusted_hosts=proxies.trusted_proxies())
+    return TestClient(wrapped, client=peer)
 
 
 @pytest.fixture
-def via_proxy(db_path):
-    return _behind(PROXY)
+def via_proxy(db_path, monkeypatch):
+    return _behind(PROXY, monkeypatch)
 
 
 @pytest.fixture
-def direct(db_path):
-    return _behind(STRANGER)
+def direct(db_path, monkeypatch):
+    return _behind(STRANGER, monkeypatch)
 
 
 def _wrong_password(client, forwarded_for=None):
@@ -130,3 +149,102 @@ def test_forwarded_proto_from_an_unlisted_peer_is_ignored(direct, part) -> None:
 
 def test_without_forwarded_proto_the_scheme_is_unchanged(via_proxy, part) -> None:
     assert _part_url(via_proxy, part).startswith("http://")
+
+
+# --- what uvicorn is configured with ------------------------------------------
+
+
+def _loaded(monkeypatch, value):
+    import uvicorn
+
+    if value is not None:
+        monkeypatch.setenv(TRUSTED_PROXIES_ENV_VAR, value)
+    config = uvicorn.Config(app, **proxies.server_options())
+    config.load()
+    return config.loaded_app
+
+
+@pytest.mark.parametrize("value", [None, "", " , "])
+def test_unset_uvicorn_gets_the_app_without_the_middleware(monkeypatch, value) -> None:
+    assert not isinstance(_loaded(monkeypatch, value), ProxyHeadersMiddleware)
+
+
+def test_unset_ignores_uvicorns_own_environment_variable(monkeypatch) -> None:
+    """``FORWARDED_ALLOW_IPS`` is uvicorn's own way in. It must not be a second one."""
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "*")
+    assert not isinstance(_loaded(monkeypatch, None), ProxyHeadersMiddleware)
+
+
+def test_set_uvicorn_wraps_the_app_and_trusts_only_the_list(monkeypatch) -> None:
+    loaded = _loaded(monkeypatch, TRUSTED_RANGE)
+
+    assert isinstance(loaded, ProxyHeadersMiddleware)
+    assert PROXY[0] in loaded.trusted_hosts
+    assert STRANGER[0] not in loaded.trusted_hosts
+    assert "127.0.0.1" not in loaded.trusted_hosts
+
+
+# --- the real server, over real HTTP on loopback ---------------------------------
+
+
+async def _who_am_i(scope, receive, send):
+    """A tiny ASGI app: who the server says the client is, and on what scheme."""
+    if scope["type"] != "http":
+        return
+    body = json.dumps({"client": scope["client"][0], "scheme": scope["scheme"]}).encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [(b"content-type", b"application/json")],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+def _seen_by_the_server() -> dict[str, str]:
+    """Start the server the way the tray app does, and ask it who we are while
+    claiming to be a tablet on HTTPS."""
+    controller = ServerController(app_factory=lambda: _who_am_i)
+    state = controller.start("127.0.0.1", 0)
+    try:
+        assert state.running, state.error
+        request = urllib.request.Request(
+            state.url,
+            headers={"X-Forwarded-For": "192.168.7.50", "X-Forwarded-Proto": "https"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return json.load(response)
+    finally:
+        controller.stop()
+
+
+def test_unset_loopback_is_not_believed() -> None:
+    """The gap this closes: uvicorn alone trusts ``127.0.0.1``, and on a
+    one-machine install every browser is ``127.0.0.1``."""
+    assert _seen_by_the_server() == {"client": "127.0.0.1", "scheme": "http"}
+
+
+def test_loopback_is_not_believed_when_only_another_range_is_listed(monkeypatch) -> None:
+    monkeypatch.setenv(TRUSTED_PROXIES_ENV_VAR, TRUSTED_RANGE)
+    assert _seen_by_the_server() == {"client": "127.0.0.1", "scheme": "http"}
+
+
+def test_loopback_is_believed_once_it_is_listed(monkeypatch) -> None:
+    """A proxy on the same machine is listed like any other."""
+    monkeypatch.setenv(TRUSTED_PROXIES_ENV_VAR, "127.0.0.1")
+    assert _seen_by_the_server() == {"client": "192.168.7.50", "scheme": "https"}
+
+
+@pytest.mark.parametrize("value", ["*", "0.0.0.0/0", "::/0", "ingress-nginx"])
+def test_the_tray_server_will_not_start_on_a_bad_list(monkeypatch, value) -> None:
+    monkeypatch.setenv(TRUSTED_PROXIES_ENV_VAR, value)
+    started = []
+    controller = ServerController(app_factory=lambda: started.append(1) or _who_am_i)
+
+    state = controller.start("127.0.0.1", 0)
+
+    assert not state.running
+    assert TRUSTED_PROXIES_ENV_VAR in state.error
+    assert started == []
+    assert not controller.state.running
