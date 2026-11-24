@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import ipaddress
 import os
 import secrets
 import sys
@@ -28,6 +29,59 @@ _LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 #: bench-suite's port for bench-parts (intake 8401, recon 8403), so they share a
 #: host. The container still listens on 8000: its CMD passes --port.
 DEFAULT_PORT = 8402
+
+#: The reverse proxies whose ``X-Forwarded-For`` and ``X-Forwarded-Proto`` are
+#: believed: comma-separated addresses or CIDR ranges. Unset, nobody's are.
+TRUSTED_PROXIES_ENV = "BENCH_PARTS_TRUSTED_PROXIES"
+
+
+class TrustedProxiesError(ValueError):
+    """``BENCH_PARTS_TRUSTED_PROXIES`` holds something ``serve`` won't run with."""
+
+
+def trusted_proxies(value: str) -> str | None:
+    """Check ``BENCH_PARTS_TRUSTED_PROXIES`` and return it in the form uvicorn takes.
+
+    ``None`` when it's unset or blank: then nothing is passed to uvicorn and the
+    forwarded headers stay ignored, as before. Otherwise every entry must be an
+    address or a CIDR range, and none may cover every address. A catch-all hands
+    the login throttle bucket back to whoever sets the header, and a typo must
+    not quietly mean "trust nothing" while the bench stays lockable, so both
+    stop ``serve`` rather than start it.
+    """
+    if not value.strip():
+        return None
+    cleaned = []
+    for entry in (item.strip() for item in value.split(",")):
+        if not entry:
+            continue  # a trailing comma
+        if entry == "*":
+            raise TrustedProxiesError(
+                f"{TRUSTED_PROXIES_ENV} is '*', which trusts every address: any client "
+                "could then pick its own login throttle bucket. List the proxy's "
+                "address or range instead."
+            )
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+        except ValueError:
+            raise TrustedProxiesError(
+                f"{TRUSTED_PROXIES_ENV} has an entry that is not an IP address or a "
+                f"CIDR range: {entry!r}. Example: 10.42.0.0/16"
+            ) from None
+        if network.prefixlen == 0:
+            raise TrustedProxiesError(
+                f"{TRUSTED_PROXIES_ENV} has {entry!r}, which trusts every address: any "
+                "client could then pick its own login throttle bucket. List the "
+                "proxy's address or range instead."
+            )
+        # Normalised (10.42.1.5/16 -> 10.42.0.0/16): uvicorn parses ranges
+        # strictly, and matches anything it can't parse as a literal string.
+        cleaned.append(str(network))
+    if not cleaned:
+        raise TrustedProxiesError(
+            f"{TRUSTED_PROXIES_ENV} is set but lists no address or range: {value!r}."
+        )
+    return ",".join(cleaned)
 
 
 def _data(args: argparse.Namespace) -> Path:
@@ -52,6 +106,11 @@ def cmd_serve(args: argparse.Namespace, run: Callable[..., None] | None = None) 
             "page and the API. Keep it off public networks.",
             file=sys.stderr,
         )
+    try:
+        proxies = trusted_proxies(os.environ.get(TRUSTED_PROXIES_ENV, ""))
+    except TrustedProxiesError as exc:
+        print(f"{exc}\nbench-parts won't start until it's fixed or unset.", file=sys.stderr)
+        return 2
     from bench_parts.app import app  # imported late: it reads the settings at import
 
     if run is None:
@@ -59,7 +118,12 @@ def cmd_serve(args: argparse.Namespace, run: Callable[..., None] | None = None) 
 
         run = uvicorn.run
     print(f"bench-parts on http://{args.host}:{args.port}/  (data: {data})")
-    run(app, host=args.host, port=args.port)
+    if proxies is None:
+        run(app, host=args.host, port=args.port)
+    else:
+        # uvicorn's own ProxyHeadersMiddleware does the work: it rewrites the
+        # client address and scheme only when the TCP peer is one of these.
+        run(app, host=args.host, port=args.port, forwarded_allow_ips=proxies)
     return 0
 
 

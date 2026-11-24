@@ -34,6 +34,11 @@ spec:
             # corrupts on NFS rather than erroring.
             - name: BENCH_PARTS_SQLITE_NFS
               value: "0"
+            # Behind an ingress controller, add BENCH_PARTS_TRUSTED_PROXIES in your
+            # overlay: the controller's pod range, as narrow as the cluster allows,
+            # never the whole LAN. Without it every browser shares one login
+            # throttle bucket. With TLS at the ingress, add
+            # BENCH_PARTS_COOKIE_SECURE=1 too. See README.md, "Behind an ingress".
           envFrom:
             # BENCH_PARTS_PASSWORD_HASH (required), BENCH_PARTS_SESSION_SECRET, and
             # BENCH_PARTS_API_TOKEN (for benchhud and scripts). See

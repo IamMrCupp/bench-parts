@@ -228,3 +228,69 @@ def test_new_token_print_writes_only_the_token(tmp_path, capsys) -> None:
     assert len(token) >= 40
     assert captured.err == ""
     assert settings.read_settings(tmp_path / "settings.env")[auth.API_TOKEN_ENV_VAR] == token
+
+
+# --- behind a reverse proxy (#151) -----------------------------------------------
+
+
+@pytest.mark.parametrize("value", [None, "", "  "])
+def test_serve_passes_nothing_extra_without_trusted_proxies(tmp_path, value) -> None:
+    """Unset (or blank), uvicorn is started exactly as it was before the setting."""
+    os.environ.pop(cli.TRUSTED_PROXIES_ENV, None)
+    if value is not None:
+        os.environ[cli.TRUSTED_PROXIES_ENV] = value
+    calls = []
+    assert cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw)) == 0
+    assert calls == [{"host": "127.0.0.1", "port": 8402}]
+
+
+def test_serve_hands_trusted_proxies_to_uvicorn(tmp_path) -> None:
+    os.environ[cli.TRUSTED_PROXIES_ENV] = "10.42.0.0/16, 192.168.7.2 ,fd00:42::/64,"
+    calls = []
+    assert cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw)) == 0
+    assert calls == [
+        {
+            "host": "127.0.0.1",
+            "port": 8402,
+            "forwarded_allow_ips": "10.42.0.0/16,192.168.7.2/32,fd00:42::/64",
+        }
+    ]
+
+
+def test_serve_reads_trusted_proxies_from_the_settings_file(tmp_path) -> None:
+    os.environ.pop(cli.TRUSTED_PROXIES_ENV, None)
+    settings.write_setting(tmp_path / "settings.env", cli.TRUSTED_PROXIES_ENV, "10.42.0.0/16")
+    calls = []
+    cli.cmd_serve(_args(tmp_path, "serve"), run=lambda app, **kw: calls.append(kw))
+    assert calls[0]["forwarded_allow_ips"] == "10.42.0.0/16"
+
+
+def test_a_range_with_host_bits_is_normalised_for_uvicorn() -> None:
+    """uvicorn parses ranges strictly and would match ``10.42.1.5/16`` as a
+    literal string, which is to say never."""
+    assert cli.trusted_proxies("10.42.1.5/16") == "10.42.0.0/16"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "*",
+        "0.0.0.0/0",
+        "::/0",
+        "10.42.0.0/16,*",
+        "10.42.0.0/16, 0.0.0.0/0",
+        "10.42.0.0/33",
+        "ingress-nginx",
+        "10.42.0.0/16 10.43.0.0/16",
+        ",",
+    ],
+)
+def test_serve_refuses_trusted_proxies_it_cannot_stand_behind(tmp_path, capsys, value) -> None:
+    """A catch-all gives the throttle bucket back to the client, and a typo must
+    not quietly mean "trust nothing": both stop ``serve`` with the reason."""
+    os.environ[cli.TRUSTED_PROXIES_ENV] = value
+    ran = []
+    code = cli.cmd_serve(_args(tmp_path, "serve"), run=lambda *a, **k: ran.append(a))
+    assert code == 2
+    assert ran == []
+    assert cli.TRUSTED_PROXIES_ENV in capsys.readouterr().err

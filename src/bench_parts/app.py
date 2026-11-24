@@ -96,11 +96,15 @@ login_limiter = RateLimiter()
 
 
 def _client_ip(request: Request) -> str | None:
-    """Best-effort client address.
+    """Best-effort client address: the connection's peer, never a header.
 
-    Deliberately ignores `X-Forwarded-For`: nothing terminates in front of this
-    service today, so honouring a client-supplied header would let anyone reset
-    their own throttle bucket by changing it. Revisit if a proxy ever lands.
+    This does not read `X-Forwarded-For`, and must not start: a header anyone
+    can set would let a client pick its own throttle bucket. Behind a reverse
+    proxy, set `BENCH_PARTS_TRUSTED_PROXIES` to the proxy's address or range.
+    `serve` hands that to uvicorn, whose proxy-headers middleware replaces
+    `request.client` with the forwarded address only when the TCP peer is
+    listed. Unset, every request is its peer, and behind a proxy that means
+    every browser shares one bucket.
     """
     return request.client.host if request.client else None
 

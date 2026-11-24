@@ -51,6 +51,44 @@ patches:
 
 Then `kubectl apply -k overlays/bench`.
 
+## Behind an ingress
+
+The overlay above exposes the Service directly, and needs nothing more. If you
+put an ingress controller in front instead (LAN-only, terminating TLS), every
+browser reaches the pod from the controller's address. Without the setting
+below, five wrong passwords from any device lock sign-in for everyone for five
+minutes, and the URLs in API responses say `http://`.
+
+Add two variables in your overlay:
+
+```yaml
+patches:
+  - target: {kind: Deployment, name: bench-parts}
+    patch: |-
+      # The ingress controller's pod range, as narrow as your cluster allows.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: BENCH_PARTS_TRUSTED_PROXIES, value: "10.42.0.0/16"}
+      # TLS ends at the ingress, so the session cookie can be HTTPS-only.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: BENCH_PARTS_COOKIE_SECURE, value: "1"}
+```
+
+- **Narrow means the controller, not the LAN.** `X-Forwarded-For` is believed
+  from any address in the list. The best value is the controller pod's own
+  range: the node's pod CIDR if the controller is pinned to a node, the cluster
+  pod CIDR if it can land anywhere. Never the LAN range the browsers are on.
+- **Any pod inside a trusted range can choose its own throttle bucket** by
+  sending the header itself. With the whole pod CIDR trusted, that's every
+  workload in the cluster. A NetworkPolicy that admits only the ingress
+  controller to port 8000 closes that.
+- **The pod won't start on a bad list.** `*`, `0.0.0.0/0`, `::/0` or an entry
+  that isn't an address or a range exits with code 2 and says why:
+  `kubectl logs` shows the message, and the pod crashloops until it's fixed.
+- **Set both or neither.** `BENCH_PARTS_COOKIE_SECURE=1` without HTTPS means
+  the browser never sends the session cookie back, and sign-in fails silently.
+
 ## What not to change
 
 - **`replicas: 1` and `strategy: Recreate`.** SQLite takes exactly one writer
