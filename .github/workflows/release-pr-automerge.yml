@@ -15,7 +15,7 @@ name: release-pr-automerge
 
 on:
   workflow_run:
-    workflows: [CI, Image]
+    workflows: [CI, Image, No Claude in commits]
     types: [completed]
     branches: ["release-please--**"]
 
