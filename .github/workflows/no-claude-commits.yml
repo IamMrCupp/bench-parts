@@ -1,0 +1,37 @@
+name: No Claude in commits
+
+# Claude can review PRs here, but it never shows up in a commit: not as the
+# author or committer, not in a Co-Authored-By or Signed-off-by trailer, not in
+# a "Generated with Claude Code" line. Cloud sessions add those by default and
+# the local commit hook doesn't run there, so this is the backstop.
+#
+# A pull request checks its own commits. A push to main checks all of main, so
+# a direct or force push can't sneak one in either.
+
+on:
+  pull_request:
+    # `edited` re-checks when a PR is retargeted, e.g. a stacked PR moved onto
+    # main, whose range then includes commits the first run never saw.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Self-test the check's patterns
+        run: .github/scripts/test-no-claude-commits.sh .github/scripts/no-claude-commits.sh
+
+      - name: Check every commit for Claude attribution
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: .github/scripts/no-claude-commits.sh
