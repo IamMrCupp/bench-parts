@@ -30,9 +30,12 @@ concurrency:
 
 jobs:
   merge:
+    # A fork can name its branch like the release branch, so the run has to
+    # come from this repo, not only carry that name.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'pull_request'
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Merge the release PR
